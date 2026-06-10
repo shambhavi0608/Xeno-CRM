@@ -1,0 +1,6 @@
+{
+  "name": "Xeno CRM",
+  "description": "An AI-Native Mini CRM with real-time analytics, hybrid segmentation, and generative personalization for D2C brands.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
