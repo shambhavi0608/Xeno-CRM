@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, useScroll, useTransform, useSpring, useMotionTemplate } from 'motion/react';
 import { 
   ArrowRight, 
   Sparkles, 
@@ -32,6 +31,7 @@ import { useToast } from '../components/ui/Toast';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [scrollY, setScrollY] = useState(0);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -67,44 +67,14 @@ export default function LandingPage() {
     }
   };
 
-  const { scrollY } = useScroll();
-
-  // Luxurious decelerating interpolation with a high-end spring physics loop!
-  const smoothScrollY = useSpring(scrollY, {
-    stiffness: 45,
-    damping: 18,
-    mass: 0.3
-  });
-
-  // Precise fluid multi-layer Parallax transforms driven directly by spring coordinates
-  const bgGlow1Y = useTransform(smoothScrollY, (v) => `${v * 0.01}px`);
-  const bgGlow2Y = useTransform(smoothScrollY, (v) => `${v * -0.015}px`);
-  const bgGlow3Y = useTransform(smoothScrollY, (v) => `${v * 0.012}px`);
-
-  const bgCrmY = useTransform(smoothScrollY, (v) => `${Math.min(80, Math.max(-80, v * 0.08))}px`);
-
-  // Mouse vector coordinates mapped sequentially for the 3D depth floating chairs
-  const rotateX1 = 18 + mousePos.y * 12;
-  const rotateY1 = -18 + mousePos.x * 12;
-  const rotateX2 = 15 + mousePos.y * -12;
-  const rotateY2 = 15 + mousePos.x * -12;
-  const rotateX3 = 22 + mousePos.y * 14;
-  const rotateY3 = 12 + mousePos.x * 14;
-
-  const chair1ScrollY = useTransform(smoothScrollY, (v) => Math.min(40, Math.max(-40, v * -0.04)));
-  const chair2ScrollY = useTransform(smoothScrollY, (v) => Math.min(40, Math.max(-40, v * 0.05)));
-  const chair3ScrollY = useTransform(smoothScrollY, (v) => Math.min(40, Math.max(-40, v * -0.03)));
-
-  const chair1Transform = useMotionTemplate`perspective(1000px) rotateX(${rotateX1}deg) rotateY(${rotateY1}deg) rotateZ(4deg) translateY(${chair1ScrollY}px) scale(0.85)`;
-  const chair2Transform = useMotionTemplate`perspective(1000px) rotateX(${rotateX2}deg) rotateY(${rotateY2}deg) rotateZ(-10deg) translateY(${chair2ScrollY}px) scale(0.9)`;
-  const chair3Transform = useMotionTemplate`perspective(1000px) rotateX(${rotateX3}deg) rotateY(${rotateY3}deg) rotateZ(6deg) translateY(${chair3ScrollY}px) scale(0.92)`;
-
-  const heroLeftY = useTransform(smoothScrollY, (v) => Math.min(30, Math.max(-30, v * -0.03)));
-  const heroRightY = useTransform(smoothScrollY, (v) => -25 + Math.min(40, Math.max(-40, v * 0.04)));
-
-  const bgPrismHubY = useTransform(smoothScrollY, (v) => Math.min(100, Math.max(-100, (v - 1100) * 0.12)));
-  const sec3HeaderY = useTransform(smoothScrollY, (v) => Math.min(25, Math.max(-25, (v - 1200) * -0.03)));
-  const sec3ShowcaseY = useTransform(smoothScrollY, (v) => Math.min(35, Math.max(-35, (v - 1300) * -0.05)));
+  // Monitor scrolling to compute precise fluid multi-layer Parallax velocities!
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Monitor mouse motion to drive interactive 3D viewport offsets
   useEffect(() => {
@@ -119,7 +89,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="bg-editorial text-white min-h-screen overflow-x-hidden no-scrollbar relative select-none leading-normal font-sans">
+    <div className="bg-editorial text-white min-h-screen overflow-x-hidden relative select-none leading-normal font-sans">
       
       {/* ========================================================= */}
       {/* SHIFTING FLUID BACKGROUND GLOWS (FLUXORA COMPLIANT) */}
@@ -130,7 +100,7 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-black/40" />
 
         {/* Backdrop Aura orange glow connected beautifully with our brand palette (Microscopic speed 0.1x) */}
-        <motion.div 
+        <div 
           className="absolute rounded-full filter blur-[150px] opacity-25 transition-all duration-750 ease-in-out animate-glow-a"
           style={{
             width: '800px',
@@ -138,12 +108,12 @@ export default function LandingPage() {
             background: 'radial-gradient(circle, rgba(255, 69, 0, 0.25) 0%, transparent 70%)',
             top: '10%',
             right: '-10%',
-            y: bgGlow1Y
+            transform: `translateY(${scrollY * 0.01}px)`
           }}
         />
 
         {/* Layer 2: Fiery Crimson Radial Glow Left (Microscopic speed 0.1x) */}
-        <motion.div 
+        <div 
           className="absolute rounded-full filter blur-[120px] opacity-15 animate-glow-b"
           style={{
             width: '600px',
@@ -151,12 +121,12 @@ export default function LandingPage() {
             background: 'radial-gradient(circle, #FF4500 0%, transparent 70%)',
             top: '-5%',
             left: '-10%',
-            y: bgGlow2Y
+            transform: `translateY(${scrollY * -0.015}px)`
           }}
         />
 
         {/* Layer 3: Sunburst Gold Glow bottom (Microscopic speed 0.1x) */}
-        <motion.div 
+        <div 
           className="absolute rounded-full filter blur-[110px] opacity-15 animate-glow-c"
           style={{
             width: '500px',
@@ -164,18 +134,18 @@ export default function LandingPage() {
             background: 'radial-gradient(circle, #FFD700 0%, transparent 80%)',
             top: '35%',
             left: '30%',
-            y: bgGlow3Y
+            transform: `translateY(${scrollY * 0.012}px)`
           }}
         />
       </div>
 
       {/* Background branding text layer moving at standard pace (0.5x) */}
-      <motion.div 
+      <div 
         className="absolute left-[5%] top-[14%] text-[24vw] font-bold text-[#FF4500]/[0.025] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-0"
-        style={{ y: bgCrmY }}
+        style={{ transform: `translateY(${scrollY * 0.15}px)` }}
       >
         CRM
-      </motion.div>
+      </div>
 
       {/* ========================================================= */}
       {/* NAVIGATION HEADER BAR */}
@@ -201,7 +171,45 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Stripped out all navigation tab-links inside middle column to provide cleanest spacing */}
+        {/* Navigation tab-links in middle column */}
+        <nav className="hidden md:flex items-center gap-8 text-xs font-semibold tracking-wide text-stone-400 font-sans">
+          <a 
+            href="#features" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Features
+          </a>
+          <a 
+            href="#ai_segmenter_sandbox_card" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('ai_segmenter_sandbox_card')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            AI Sandbox
+          </a>
+          <a 
+            href="#delivery-channels" 
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('delivery-channels')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="hover:text-white transition-colors cursor-pointer"
+          >
+            Channels
+          </a>
+          <button 
+            onClick={() => navigate('/dashboard')}
+            className="hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0 text-xs font-semibold text-stone-400 font-sans"
+          >
+            Dashboard
+          </button>
+        </nav>
 
         <button 
           onClick={() => navigate('/dashboard')}
@@ -221,12 +229,20 @@ export default function LandingPage() {
         {/* ========================================================= */}
         
         {/* CHAIR 1: INGESTION NODE CHAIR (Floating Top-Left) */}
-        <motion.div 
+        <div 
           className="absolute z-30 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
           style={{
             left: '-1%',
             top: '4%',
-            transform: chair1Transform,
+            transform: `
+              perspective(1000px) 
+              rotateX(${18 + mousePos.y * 12}deg) 
+              rotateY(${-18 + mousePos.x * 12}deg) 
+              rotateZ(4deg) 
+              translateY(${scrollY * -0.04}px)
+              translateY(${Math.sin((Date.now() / 1500)) * 6}px)
+              scale(0.85)
+            `,
           }}
         >
           {/* Glass Structure */}
@@ -242,15 +258,23 @@ export default function LandingPage() {
             </svg>
             <div className="w-14 h-3 bg-orange-500/10 rounded-full filter blur-md pointer-events-none select-none mt-1 animate-pulse" />
           </div>
-        </motion.div>
+        </div>
 
         {/* CHAIR 2: COHORT SEGMENTER CHAIR (Floating Center-Left) */}
-        <motion.div 
+        <div 
           className="absolute z-35 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
           style={{
             left: '42%',
             top: '48%',
-            transform: chair2Transform,
+            transform: `
+              perspective(1000px) 
+              rotateX(${15 + mousePos.y * -12}deg) 
+              rotateY(${15 + mousePos.x * -12}deg) 
+              rotateZ(-10deg) 
+              translateY(${scrollY * 0.05}px)
+              translateY(${Math.cos((Date.now() / 1700)) * 7}px)
+              scale(0.9)
+            `,
           }}
         >
           {/* Glass Structure */}
@@ -266,15 +290,23 @@ export default function LandingPage() {
             </svg>
             <div className="w-16 h-4 bg-yellow-500/10 rounded-full filter blur-md pointer-events-none mt-1 animate-pulse" />
           </div>
-        </motion.div>
+        </div>
 
         {/* CHAIR 3: ASYNC DISPATCH CHAIR (Floating Bottom-Right) */}
-        <motion.div 
+        <div 
           className="absolute z-35 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
           style={{
             right: '1%',
             bottom: '12%',
-            transform: chair3Transform,
+            transform: `
+              perspective(1000px) 
+              rotateX(${22 + mousePos.y * 14}deg) 
+              rotateY(${12 + mousePos.x * 14}deg) 
+              rotateZ(6deg) 
+              translateY(${scrollY * -0.03}px)
+              translateY(${Math.sin((Date.now() / 1900)) * 6}px)
+              scale(0.92)
+            `,
           }}
         >
           {/* Glass Structure */}
@@ -290,12 +322,12 @@ export default function LandingPage() {
             </svg>
             <div className="w-15 h-3 bg-red-600/10 rounded-full filter blur-md pointer-events-none mt-1" />
           </div>
-        </motion.div>
+        </div>
 
         {/* HERO CAPTION LEFT (ENLARGED TYPOGRAPHY MATCHING ATTACHED SCREENSHOT) */}
-        <motion.div 
-          className="lg:col-span-6 space-y-8 relative z-25"
-          style={{ y: heroLeftY }}
+        <div 
+          className="lg:col-span-6 space-y-8 transition-transform relative z-25"
+          style={{ transform: `translateY(${scrollY * -0.05}px)` }}
         >
           <div className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-stone-900/90 border border-white/10 text-[11px] text-stone-400 font-mono tracking-wide font-semibold select-none">
             <span className="w-1.5 h-1.5 rounded-full bg-[#FF4500] animate-ping" />
@@ -351,18 +383,18 @@ export default function LandingPage() {
               <div className="text-[11px] text-stone-400 mt-1 font-medium font-sans">Loop Delivery Success</div>
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* HERO RIGHT: STANDALONE HIGH-FIDELITY CINEMATIC VIDEO PLAYBACK LOOP */}
-        <motion.div 
-          className="lg:col-span-6 relative flex flex-col items-center justify-center min-h-[440px] z-10 lg:-mt-16 -mt-6"
-          style={{ y: heroRightY }}
+        <div 
+          className="lg:col-span-6 relative flex flex-col items-center justify-center min-h-[400px] z-10 transition-transform duration-75 lg:-mt-16 -mt-6"
+          style={{ transform: `translateY(${-35 + scrollY * 0.1}px)` }}
         >
-          <div className="w-full max-w-[680px] aspect-video rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+          <div className="w-full max-w-[480px] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black">
             <video
               ref={videoRef}
               src="https://res.cloudinary.com/dcbrdb14f/video/upload/v1781040214/The_AI_cube_powers_up_from_dar_qhp1ef.mp4"
-              className="w-full h-full object-cover select-none pointer-events-none scale-100"
+              className="w-full h-full object-cover select-none pointer-events-none"
               autoPlay
               loop
               muted
@@ -370,7 +402,7 @@ export default function LandingPage() {
               preload="auto"
             />
           </div>
-        </motion.div>
+        </div>
 
       </section>
 
@@ -480,29 +512,29 @@ export default function LandingPage() {
       <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-28 border-t border-white/6 overflow-visible" id="delivery-channels">
         
         {/* Giant background text scrolling at standard pace (0.5x), allowing cards to overlap on scroll */}
-        <motion.div 
+        <div 
           className="absolute left-6 top-1/3 text-[13vw] font-bold text-[#FF4500]/[0.018] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-0"
-          style={{ y: bgPrismHubY }}
+          style={{ transform: `translateY(${scrollY * 0.5}px)` }}
         >
           PRISM HUB
-        </motion.div>
+        </div>
 
         {/* Header information - moves at standard pace (0.5x) */}
-        <motion.div 
-          className="text-center space-y-3 max-w-xl mx-auto mb-20 relative z-10"
-          style={{ y: sec3HeaderY }}
+        <div 
+          className="text-center space-y-3 max-w-xl mx-auto mb-20 relative z-10 transition-transform duration-75"
+          style={{ transform: `translateY(${scrollY * 0.5}px)` }}
         >
           <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">Cross-Channel Dispatch Ecosystem</span>
           <h2 className="text-4xl font-extrabold tracking-tight font-display text-white">Prism Hub Gateway Delivery</h2>
           <p className="text-stone-400 text-sm font-light leading-normal">
             Interact with the actual brand gateways and check real-time payload visual templates synced dynamically within our marketing loop.
           </p>
-        </motion.div>
+        </div>
 
         {/* 3 Showcase boxes representing WhatsApp, Email, and RCS Gateways as requested (Accelerated Pace 1.2x) */}
-        <motion.div 
-          className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-25"
-          style={{ y: sec3ShowcaseY }}
+        <div 
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-25 transition-transform duration-75"
+          style={{ transform: `translateY(${scrollY * -0.2}px)` }}
         >
           
           {/* WhatsApp Brand Terminal Showcase */}
@@ -709,7 +741,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-        </motion.div>
+        </div>
 
       </section>
 

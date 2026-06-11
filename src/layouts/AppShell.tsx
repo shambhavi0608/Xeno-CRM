@@ -8,10 +8,12 @@ import {
   Play, 
   Search, 
   Bell, 
-  RefreshCw 
+  RefreshCw,
+  LogOut
 } from 'lucide-react';
 import { useToast } from '../components/ui/Toast.js';
 import { resetDemoDb, createCampaign, launchCampaign } from '../lib/api.js';
+import { useAuth } from '../components/FirebaseProvider.js';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -23,6 +25,7 @@ export default function AppShell({ children, title }: AppShellProps) {
   const location = useLocation();
   const { success, error, info } = useToast();
   const [isRunningDemo, setIsRunningDemo] = useState(false);
+  const { user, logout } = useAuth();
 
   // High performance demo automation trigger
   const handleRunDemo = async () => {
@@ -147,19 +150,37 @@ export default function AppShell({ children, title }: AppShellProps) {
         </div>
 
         {/* USER PROFILE ROW (FOOTER) */}
-        <div className="p-4 border-t border-white/6 bg-[#0a0505]/95 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-stone-800 border border-white/8 flex items-center justify-center font-bold text-xs">
-              DU
+        <div className="p-4 border-t border-white/6 bg-[#0a0505]/94 backdrop-blur-sm flex flex-col space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-stone-850 border border-[#FF4500]/15 flex items-center justify-center font-bold text-[10px] text-white">
+                {user?.email ? user.email.slice(0, 2).toUpperCase() : 'AN'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold truncate text-white">
+                  {user?.displayName || (user?.email ? user.email.split('@')[0] : 'Anonymous User')}
+                </p>
+                <p className="text-[9px] text-[#7a6f6f] truncate font-mono">
+                  {user?.email || 'anonymous-token'}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold truncate text-white">Demo User</p>
-              <p className="text-[10px] text-[#606060] truncate font-mono">demo@xeno.com</p>
-            </div>
+            
+            <button 
+              onClick={async () => {
+                await logout();
+                success('Logged Out', 'Successfully cleared secure cloud database sessions.');
+                navigate('/');
+              }}
+              className="p-1.5 rounded bg-white/4 hover:bg-red-500/10 text-[#7a6f6f] hover:text-red-400 active:scale-95 transition-all cursor-pointer"
+              title="Sign Out Account"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="flex items-center gap-1.5 mt-3 px-1">
+          <div className="flex items-center gap-1.5 px-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-            <span className="text-[11px] font-medium text-[#22C55E]">CRM System Live</span>
+            <span className="text-[10px] font-mono text-[#22C55E] uppercase tracking-wider">Cloud Firestore Active</span>
           </div>
         </div>
 

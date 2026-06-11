@@ -1,0 +1,150 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper 1: Global Catch-All Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Global Helper Definitions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedUser() {
+      // Mandate that the email is verified to prevent spoofing
+      return isSignedIn() && (
+        request.auth.token.email_verified == true || 
+        request.auth.token.firebase.sign_in_provider == 'anonymous'
+      );
+    }
+
+    function isValidId(id) {
+       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validates incoming data references standard properties
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Helper 2: Entity Schema Validators (Anti-Value Poisoning & Anti-Shadow Fields)
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email', 'name', 'createdAt']) &&
+             data.keys().size() == 4 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.createdAt is string;
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'phone', 'memberSince', 'totalSpent', 'orderCount', 'lastOrderDate', 'tags']) &&
+             data.keys().size() == 9 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.phone is string && data.phone.size() <= 32 &&
+             data.memberSince is string &&
+             data.totalSpent is number && data.totalSpent >= 0 &&
+             data.orderCount is number && data.orderCount >= 0 &&
+             data.lastOrderDate is string &&
+             data.tags is list && data.tags.size() <= 12 &&
+             (data.tags.size() == 0 || data.tags[0] is string);
+    }
+
+    function isValidCampaign(data) {
+      return data.keys().hasAll([
+        'campaignId', 'name', 'audiencePrompt', 'matchedCount', 'message', 
+        'channel', 'status', 'createdAt', 'sent_count', 'delivered_count', 
+        'opened_count', 'clicked_count', 'failed_count', 'orders_attributed', 
+        'revenue_attributed'
+      ]) &&
+             data.keys().size() == 15 &&
+             data.campaignId is string && data.campaignId.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.audiencePrompt is string && data.audiencePrompt.size() <= 1000 &&
+             data.matchedCount is number && data.matchedCount >= 0 &&
+             data.message is string && data.message.size() <= 10000 &&
+             data.channel is string && data.channel in ['whatsapp', 'email', 'sms', 'rcs'] &&
+             data.status is string && data.status in ['draft', 'active', 'completed', 'paused'] &&
+             data.createdAt is string &&
+             data.sent_count is number && data.sent_count >= 0 &&
+             data.delivered_count is number && data.delivered_count >= 0 &&
+             data.opened_count is number && data.opened_count >= 0 &&
+             data.clicked_count is number && data.clicked_count >= 0 &&
+             data.failed_count is number && data.failed_count >= 0 &&
+             data.orders_attributed is number && data.orders_attributed >= 0 &&
+             data.revenue_attributed is number && data.revenue_attributed >= 0;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['orderId', 'customerId', 'amount', 'items', 'timestamp']) &&
+             data.keys().size() == 5 &&
+             data.orderId is string && data.orderId.size() <= 128 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.amount is number && data.amount >= 0 &&
+             data.items is list && data.items.size() <= 100 &&
+             (data.items.size() == 0 || data.items[0] is string) &&
+             data.timestamp is string;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['eventId', 'campaignId', 'customerId', 'status', 'timestamp']) &&
+             data.keys().size() == 5 &&
+             data.eventId is string && data.eventId.size() <= 256 &&
+             data.campaignId is string && data.campaignId.size() <= 128 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.status is string && data.status in ['sent', 'delivered', 'opened', 'clicked', 'failed'] &&
+             data.timestamp is string;
+    }
+
+    // Rules for individual paths
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if false;
+
+      // Customers Subcollection
+      match /customers/{customerId} {
+        allow list, get: if isOwner(userId) && isValidId(customerId);
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomer(incoming());
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomer(incoming());
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(customerId);
+      }
+
+      // Campaigns Subcollection
+      match /campaigns/{campaignId} {
+        allow list, get: if isOwner(userId) && isValidId(campaignId);
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(campaignId) && isValidCampaign(incoming());
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(campaignId) && isValidCampaign(incoming());
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(campaignId);
+      }
+
+      // Orders Subcollection
+      match /orders/{orderId} {
+        allow list, get: if isOwner(userId) && isValidId(orderId);
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(orderId) && isValidOrder(incoming());
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(orderId) && isValidOrder(incoming());
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(orderId);
+      }
+
+      // Events Subcollection
+      match /events/{eventId} {
+        allow list, get: if isOwner(userId) && isValidId(eventId);
+        allow create: if isOwner(userId) && isVerifiedUser() && isValidId(eventId) && isValidEvent(incoming());
+        allow update: if isOwner(userId) && isVerifiedUser() && isValidId(eventId) && isValidEvent(incoming());
+        allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(eventId);
+      }
+    }
+  }
+}

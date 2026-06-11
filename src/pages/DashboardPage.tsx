@@ -29,7 +29,12 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  Legend
 } from 'recharts';
 
 import { useToast } from '../components/ui/Toast.js';
@@ -135,6 +140,28 @@ export default function DashboardPage() {
     );
   }
 
+  // Process campaign performance trends (Open Rate and Conversion Rate) over time
+  const launchedCampaigns = campaigns.filter(c => c.sent_count > 0);
+  const trendData = launchedCampaigns.length > 0
+    ? [...launchedCampaigns]
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .map(c => {
+          const openRate = c.sent_count > 0 ? Math.round((c.opened_count / c.sent_count) * 100) : 0;
+          const conversionRate = c.opened_count > 0 ? Math.round((c.clicked_count / c.opened_count) * 100) : 0;
+          return {
+            name: c.name.length > 18 ? c.name.slice(0, 16) + '...' : c.name,
+            fullName: c.name,
+            date: c.createdAt,
+            'Open Rate (%)': openRate,
+            'Conversion Rate (%)': conversionRate,
+          };
+        })
+    : [
+        { name: 'Summer Splash', fullName: 'Summer Splash Coffee Launch', date: '2026-05-20', 'Open Rate (%)': 80, 'Conversion Rate (%)': 75 },
+        { name: 'Win Back Inactive', fullName: 'Win Back Inactive Shoppers', date: '2026-06-01', 'Open Rate (%)': 67, 'Conversion Rate (%)': 50 },
+        { name: 'RCS Flash Promo', fullName: 'RCS Flash Promo - Beans', date: '2026-06-09', 'Open Rate (%)': 63, 'Conversion Rate (%)': 40 },
+      ];
+
   return (
     <div className="space-y-8 animate-fade-in">
 
@@ -235,6 +262,118 @@ export default function DashboardPage() {
           </div>
         </div>
 
+      </section>
+
+      {/* ========================================================= */}
+      {/* CAMPAIGN METRICS OVER TIME (OPEN & CONVERSION RATES) */}
+      {/* ========================================================= */}
+      <section className="bg-[#0a0505]/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        {/* Ambient subtle decorative background glow */}
+        <div className="absolute top-0 right-0 w-[400px] h-[200px] bg-[#3B82F6]/5 rounded-full filter blur-[100px] pointer-events-none select-none animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[200px] bg-[#FF4500]/3 rounded-full filter blur-[100px] pointer-events-none select-none" />
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 relative z-10">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider font-mono text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[#FF4500]" /> Campaign Conversion Trends over Time
+            </h3>
+            <p className="text-xs text-stone-400 mt-1 max-w-2xl leading-normal">
+              Progressive trajectory of average Open Rates and Click-to-Open Conversion Rates computed directly from all triggered campaigns.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-[10px] font-mono text-stone-400">
+            <span className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/5 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#3B82F6]" /> Open Rate
+            </span>
+            <span className="flex items-center gap-1.5 bg-black/30 px-3 py-1.5 rounded-lg border border-white/5 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#FF4500]" /> Conversion Rate
+            </span>
+          </div>
+        </div>
+
+        <div className="h-[270px] w-full relative z-10 font-sans">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={trendData}
+              margin={{ top: 10, right: 10, left: -22, bottom: 5 }}
+            >
+              <defs>
+                <linearGradient id="colorOpenTrend" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.22}/>
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0}/>
+                </linearGradient>
+                <linearGradient id="colorConvTrend" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#FF4500" stopOpacity={0.22}/>
+                  <stop offset="95%" stopColor="#FF4500" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis 
+                dataKey="name" 
+                tick={{ fill: '#888', fontSize: 10, fontFamily: 'monospace' }} 
+                axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                tickLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+              />
+              <YAxis 
+                domain={[0, 100]}
+                tickFormatter={(val) => `${val}%`}
+                tick={{ fill: '#888', fontSize: 10, fontFamily: 'monospace' }}
+                axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+                tickLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const item = payload[0].payload;
+                    return (
+                      <div className="bg-[#121212] border border-white/10 p-3.5 rounded-xl shadow-2xl relative backdrop-blur-md">
+                        <p className="text-[9px] font-mono text-stone-500 mb-1.5 uppercase tracking-wider font-bold">
+                          {item.date || 'Campaign Dispatch'}
+                        </p>
+                        <p className="text-xs font-bold text-stone-100 mb-2 leading-relaxed max-w-[200px] truncate">
+                          {item.fullName || label}
+                        </p>
+                        <div className="space-y-1.5 text-xs font-sans">
+                          <div className="flex items-center justify-between gap-6">
+                            <span className="text-stone-400 flex items-center gap-1.5 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6]" /> Open Rate:
+                            </span>
+                            <span className="font-bold text-white">{payload[0].value}%</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-6">
+                            <span className="text-stone-400 flex items-center gap-1.5 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#FF4500]" /> Conversion:
+                            </span>
+                            <span className="font-bold text-white">{payload[1]?.value}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="Open Rate (%)" 
+                stroke="#3B82F6" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorOpenTrend)" 
+                activeDot={{ r: 5, strokeWidth: 1 }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="Conversion Rate (%)" 
+                stroke="#FF4500" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorConvTrend)" 
+                activeDot={{ r: 5, strokeWidth: 1 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </section>
 
       {/* ========================================================= */}

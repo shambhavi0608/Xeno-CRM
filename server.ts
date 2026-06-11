@@ -77,10 +77,24 @@ async function generateContentWithRetry(params: {
         }
       } catch (e: any) {
         lastError = e;
-        const errMsg = e?.message || e?.status || 'Unknown error';
+        const errMsg = typeof e === 'object' ? JSON.stringify(e) : (e?.message || e?.status || String(e));
         console.warn(`[Gemini API] Model ${modelName} (attempt ${attempt}/3) failed: ${errMsg}`);
         
-        // Brief delay before retry with backoff
+        // Detect if the server is busy / experiencing high demand (503 / UNAVAILABLE)
+        const isServerBusy = errMsg.includes('503') || 
+                             errMsg.includes('UNAVAILABLE') || 
+                             errMsg.includes('high demand') ||
+                             errMsg.includes('temporary') ||
+                             e?.status === 503 ||
+                             e?.code === 503 ||
+                             (e?.error && (e.error?.code === 503 || e.error?.status === 'UNAVAILABLE'));
+
+        if (isServerBusy) {
+          console.log(`[Gemini API] Model ${modelName} is experiencing high demand (503). Skipping immediate retries to cascade to next model...`);
+          break; // Stop retrying this model and proceed to the next model in the outer cascade loop
+        }
+
+        // Brief delay before retry with backoff for non-503 temporary errors
         if (attempt < 3) {
           const delay = attempt * 1200;
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -363,7 +377,7 @@ app.get('/api/analytics/activity', (req, res) => {
 // -------------------------------------------------------------
 app.post('/api/segment/suggest', async (req, res) => {
   const { prompt } = req.body;
-  const customers = getCustomers();
+  const customers = req.body.customers || getCustomers();
 
   if (!prompt || prompt.trim() === '') {
     return res.status(400).json({ message: 'Prompt is required' });

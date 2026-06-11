@@ -1,0 +1,245 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique ID of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "name": {
+          "type": "string",
+          "description": "User full name"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": [
+        "userId",
+        "email",
+        "name",
+        "createdAt"
+      ]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A retail customer record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique id of the customer"
+        },
+        "name": {
+          "type": "string",
+          "description": "Customer full name"
+        },
+        "email": {
+          "type": "string",
+          "description": "Customer email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Customer phone number"
+        },
+        "memberSince": {
+          "type": "string",
+          "description": "ISO date of registration"
+        },
+        "totalSpent": {
+          "type": "number",
+          "description": "Accumulated revenue from customer orders"
+        },
+        "orderCount": {
+          "type": "number",
+          "description": "Total order count"
+        },
+        "lastOrderDate": {
+          "type": "string",
+          "description": "ISO date of the most recent purchase"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Segmentation tags"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "phone",
+        "memberSince",
+        "totalSpent",
+        "orderCount",
+        "lastOrderDate",
+        "tags"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A customer transaction record",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "description": "Unique order ID"
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Reference customer ID"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction total purchase value"
+        },
+        "items": {
+          "type": "array",
+          "description": "Items purchased"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Purchase transaction date"
+        }
+      },
+      "required": [
+        "orderId",
+        "customerId",
+        "amount",
+        "items",
+        "timestamp"
+      ]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "A segmentation communication campaign",
+      "type": "object",
+      "properties": {
+        "campaignId": {
+          "type": "string",
+          "description": "Unique campaign ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-friendly campaign title"
+        },
+        "audiencePrompt": {
+          "type": "string",
+          "description": "The segmentation prompt used"
+        },
+        "matchedCount": {
+          "type": "number",
+          "description": "Calculated subscriber list size"
+        },
+        "message": {
+          "type": "string",
+          "description": "Personalized broadcast copy draft"
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["whatsapp", "email", "sms", "rcs"],
+          "description": "Destination pathway channel"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "active", "completed", "paused"],
+          "description": "Campaign lifecycle status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Date created"
+        },
+        "sent_count": {
+          "type": "number"
+        },
+        "delivered_count": {
+          "type": "number"
+        },
+        "opened_count": {
+          "type": "number"
+        },
+        "clicked_count": {
+          "type": "number"
+        },
+        "failed_count": {
+          "type": "number"
+        },
+        "orders_attributed": {
+          "type": "number"
+        },
+        "revenue_attributed": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "campaignId",
+        "name",
+        "audiencePrompt",
+        "matchedCount",
+        "message",
+        "channel",
+        "status",
+        "createdAt"
+      ]
+    },
+    "CommunicationEvent": {
+      "title": "CommunicationEvent",
+      "description": "Broadcast delivery tracking item",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string"
+        },
+        "campaignId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["sent", "delivered", "opened", "clicked", "failed"]
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "campaignId",
+        "customerId",
+        "status",
+        "timestamp"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "The user profile document"
+    },
+    "/users/{userId}/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customers belonging to user"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders belonging to user"
+    },
+    "/users/{userId}/campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Campaign documents under user"
+    },
+    "/users/{userId}/events/{eventId}": {
+      "schema": "CommunicationEvent",
+      "description": "Log events for tracked messaging"
+    }
+  }
+}
