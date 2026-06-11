@@ -6,7 +6,7 @@ import { Mail, Lock, User, Sparkles, LogIn, KeyRound, Loader, ShieldCheck, Alert
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { login, register, loginAnonymously } = useAuth();
+  const { login, register, loginAnonymously, loginAsDemo } = useAuth();
   const { success, error, info } = useToast();
 
   const [isLogin, setIsLogin] = useState(true);
@@ -36,16 +36,35 @@ export default function AuthPage() {
       navigate('/dashboard');
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('operation-not-allowed')) {
-        setAuthErrorTip('email-password');
+      if (msg.includes('operation-not-allowed') || msg.includes('admin-restricted-operation')) {
+        info('Console Bypass Triggered', 'Firebase providers not enabled yet. Gracefully dropping back to Local Demo Mode...');
+        loginAsDemo();
+        success('Demo Mode Session Initialized', 'Welcome! Seeded roastery defaults locally in storage.');
+        navigate('/dashboard');
+      } else {
+        error('Authentication Error', err.message || 'Details provided are incorrect.');
       }
-      error('Authentication Error', err.message || 'Details provided are incorrect.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDemoSignIn = async () => {
+  const handleLocalDemoSignIn = async () => {
+    setLoading(true);
+    setAuthErrorTip(null);
+    info('Entering Local Demo Mode', 'Configuring local sandbox templates in storage...');
+    try {
+      loginAsDemo();
+      success('Demo Session Started', 'Successfully entered CRM workspace in Demo Mode. Local persistence active.');
+      navigate('/dashboard');
+    } catch (err: any) {
+      error('Process failed', 'Failed to configure local demo environment.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnonymousCloudSignIn = async () => {
     setLoading(true);
     setAuthErrorTip(null);
     info('Provisioning Sandbox', 'Bootstrapping temporary verified credentials in the cloud...');
@@ -56,9 +75,13 @@ export default function AuthPage() {
     } catch (err: any) {
       const msg = err.message || '';
       if (msg.includes('admin-restricted-operation') || msg.includes('operation-not-allowed')) {
-        setAuthErrorTip('anonymous');
+        info('Console Bypass Triggered', 'Firebase provider not enabled. Gracefully falling back to Local Demo Mode...');
+        loginAsDemo();
+        success('Demo Mode Session Initialized', 'Welcome! Seeded roastery defaults locally in storage.');
+        navigate('/dashboard');
+      } else {
+        error('Provisioning failed', err.message || 'Failed to authenticate anonymously.');
       }
-      error('Provisioning failed', err.message || 'Failed to authenticate anonymously.');
     } finally {
       setLoading(false);
     }
@@ -78,7 +101,7 @@ export default function AuthPage() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-85 active:scale-98 transition-all select-none group"
           title="Return to Welcome Page"
         >
-          {/* Fluxora Overlapping Geometric Logo */}
+          {/* Xeno CRM Overlapping Geometric Logo */}
           <div className="relative w-6 h-6 flex items-center justify-center mr-1">
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD700] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
@@ -86,7 +109,7 @@ export default function AuthPage() {
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
           </div>
           <span className="text-2xl font-bold tracking-tight text-white font-display flex items-center">
-            Fluxora
+            Xeno <span className="text-[#FF4500]">CRM</span>
           </span>
         </div>
 
@@ -216,45 +239,41 @@ export default function AuthPage() {
           <div className="flex-1 h-[1px] bg-white/5" />
         </div>
 
-        {/* Sandbox anonymous direct login */}
+        {/* Local Demo Mode direct entry */}
         <button
-          onClick={handleDemoSignIn}
+          onClick={handleLocalDemoSignIn}
           disabled={loading}
-          className="w-full py-2.5 rounded-xl bg-stone-900 hover:bg-stone-850 border border-white/8 text-xs font-semibold hover:border-orange-500/30 transition-all duration-300 flex items-center justify-center gap-2 text-stone-300 active:scale-98 cursor-pointer shadow-md"
+          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 border border-orange-500/30 hover:border-orange-500/50 hover:bg-stone-800 text-xs font-semibold hover:shadow-orange-950/20 shadow-md transition-all duration-300 flex items-center justify-center gap-2 text-orange-200 active:scale-98 cursor-pointer mt-2"
         >
-          <KeyRound className="w-4 h-4 text-[#FFD700]" />
-          Instant Anonymous Sandbox login
+          <Sparkles className="w-4 h-4 text-[#FF4500] animate-pulse" />
+          Explore in Local Demo Mode
         </button>
+
+        <div className="mt-4 text-center">
+          <button 
+            type="button"
+            onClick={handleAnonymousCloudSignIn}
+            className="text-[10px] text-stone-500 hover:text-stone-300 transition-all font-mono tracking-wide underline cursor-pointer"
+          >
+            Or try Anonymous Cloud Auth (fallback active)
+          </button>
+        </div>
 
         {authErrorTip && (
           <div className="mt-5 p-4 rounded-2xl bg-orange-950/30 border border-orange-500/30 text-xs text-stone-200 animate-fade-in space-y-2.5 text-left font-sans">
             <div className="flex items-start gap-2 text-orange-400 font-bold text-[10.5px] uppercase tracking-wider">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Authentication Settings Required</span>
+              <span>Developer Workspace fall-back activated</span>
             </div>
             <p className="text-stone-300 leading-normal text-[11px]">
-              This app is powered by your real Google Firebase project. To support credentials and anonymous testing, please enable these sign-in options in your Firebase Console:
+              You have been successfully transitioned into <strong>Local Offline Demo Mode</strong>! Your browser is storing an independent, secure sandbox profile in <code>localStorage</code>. No further setup is required to explore all app views.
             </p>
-            <ol className="list-decimal pl-4.5 space-y-1.5 text-stone-400 font-medium text-[10.5px]">
-              <li>Open your <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-[#FF4500] underline font-extrabold hover:text-[#FF8C00]">Firebase Console</a></li>
-              <li>Navigate to <strong className="text-stone-300">Authentication</strong> &gt; <strong className="text-stone-300">Sign-in method</strong> tab.</li>
-              {authErrorTip === 'email-password' ? (
-                <li className="text-white font-semibold">
-                  Click <strong className="text-[#FF8C00]">Add new provider</strong> &gt; select <strong className="text-[#FF8C00]">Email/Password</strong>, toggle to <strong className="text-[#FF8C00]">Enable</strong>, and click <strong className="text-[#FF8C00]">Save</strong>.
-                </li>
-              ) : (
-                <li className="text-white font-semibold">
-                  Click <strong className="text-[#FF8C00]">Add new provider</strong> &gt; select <strong className="text-[#FF8C00]">Anonymous</strong>, toggle to <strong className="text-[#FF8C00]">Enable</strong>, and click <strong className="text-[#FF8C00]">Save</strong>.
-                </li>
-              )}
-              <li>Once enabled on Firebase, return here and trigger the action again!</li>
-            </ol>
             <div className="pt-1 flex justify-end">
               <button 
                 onClick={() => setAuthErrorTip(null)}
                 className="text-[9.5px] text-stone-500 hover:text-stone-300 font-mono tracking-wider uppercase font-bold cursor-pointer"
               >
-                [ Dismiss Tip ]
+                [ Dismiss Notification ]
               </button>
             </div>
           </div>

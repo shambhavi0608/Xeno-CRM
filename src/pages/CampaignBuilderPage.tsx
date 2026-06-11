@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, 
@@ -23,9 +23,10 @@ import {
   suggestSegment, 
   generateAICopy, 
   createCampaign, 
-  launchCampaign 
+  launchCampaign,
+  predictCampaign
 } from '../lib/api.js';
-import { AISuggestion, AIMessages, Customer } from '../types/index.js';
+import { AISuggestion, AIMessages, Customer, CampaignPrediction } from '../types/index.js';
 
 export default function CampaignBuilderPage() {
   const navigate = useNavigate();
@@ -55,6 +56,33 @@ export default function CampaignBuilderPage() {
   const [campaignName, setCampaignName] = useState('');
   const [launching, setLaunching] = useState(false);
   const [launchSuccess, setLaunchSuccess] = useState(false);
+
+  // AI Prediction states
+  const [prediction, setPrediction] = useState<CampaignPrediction | null>(null);
+  const [isPredicting, setIsPredicting] = useState(false);
+
+  // Run Campaign Predictor on entering Step 3
+  useEffect(() => {
+    if (step === 3) {
+      const runPrediction = async () => {
+        try {
+          setIsPredicting(true);
+          const pred = await predictCampaign({
+            matchedCount: aiSuggestion ? aiSuggestion.count : 5,
+            channel: selectedChannel,
+            message: messageText,
+            audiencePrompt: audiencePrompt || 'Active VIP Shoppers'
+          });
+          setPrediction(pred);
+        } catch (e) {
+          console.error('[Predictor Component] Forecast hook failed', e);
+        } finally {
+          setIsPredicting(false);
+        }
+      };
+      runPrediction();
+    }
+  }, [step, selectedChannel, messageText, audiencePrompt, aiSuggestion]);
 
   // -----------------------------------------------------------------
   // HANDLERS
@@ -648,6 +676,68 @@ export default function CampaignBuilderPage() {
                     "{messageText.substring(0, 100)}..."
                   </div>
                 </div>
+              </div>
+
+              {/* ========================================================= */}
+              {/* AI PREDICTIVE OUTCOME FORECAST */}
+              {/* ========================================================= */}
+              <div className="bg-gradient-to-br from-[#120a0a] to-black border border-[#FF4500]/20 rounded-xl p-4 space-y-3 relative overflow-hidden animate-fade-in" id="campaign_prediction_section">
+                <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider font-mono">
+                  <Sparkles className="w-4 h-4 text-[#FF4500] animate-pulse" />
+                  AI Predictive Metrics Forecast
+                </div>
+                
+                {isPredicting ? (
+                  <div className="space-y-3 animate-pulse py-2" id="prediction_loader">
+                    <div className="h-4 bg-stone-900 rounded w-1/3" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="h-10 bg-stone-900 rounded" />
+                      <div className="h-10 bg-stone-900 rounded" />
+                    </div>
+                  </div>
+                ) : prediction ? (
+                  <div className="space-y-3 pt-1" id="prediction_metrics_details">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      
+                      <div className="bg-black/50 border border-white/5 rounded-lg p-3">
+                        <span className="text-stone-500 font-mono text-[9px] uppercase block">Predicted Reach (Delivered)</span>
+                        <span className="text-white text-base font-bold block mt-1 font-sans">
+                          {prediction.predictedReach} / {aiSuggestion ? aiSuggestion.count : 5}
+                        </span>
+                      </div>
+
+                      <div className="bg-black/50 border border-white/5 rounded-lg p-3">
+                        <span className="text-stone-500 font-mono text-[9px] uppercase block">Predicted Open Rate</span>
+                        <span className="text-white text-base font-bold block mt-1 font-sans">
+                          {prediction.openRate}%
+                        </span>
+                      </div>
+
+                      <div className="bg-black/50 border border-white/5 rounded-lg p-3">
+                        <span className="text-stone-500 font-mono text-[9px] uppercase block">Predicted Conv. Rate</span>
+                        <span className="text-white text-base font-bold block mt-1 font-sans">
+                          {prediction.conversionRate}%
+                        </span>
+                      </div>
+
+                      <div className="bg-black/50 border border-white/5 rounded-lg p-3 animate-pulse">
+                        <span className="text-[#22C55E] font-mono text-[9px] uppercase block">Estimated Revenue</span>
+                        <span className="text-[#22C55E] text-base font-bold block mt-1 font-sans">
+                          ₹{prediction.predictedRevenue.toLocaleString()}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    <div className="bg-black/60 border border-white/5 rounded-lg p-3 text-[11px] text-stone-400 leading-normal">
+                      <span className="font-semibold text-stone-300 font-mono block mb-1 text-[9px] uppercase">RATIONALE PROBABILITY RUN:</span>
+                      "{prediction.explanation}"
+                    </div>
+
+                  </div>
+                ) : (
+                  <p className="text-stone-500 text-xs italic">Unable to compile predictive forecast.</p>
+                )}
               </div>
 
               {/* diagnostic estimation alert */}

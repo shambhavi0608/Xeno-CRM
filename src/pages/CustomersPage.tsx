@@ -13,13 +13,15 @@ import {
   Database,
   Upload,
   X,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { fetchCustomers, fetchCustomerDetails, ingestCustomerData } from '../lib/api.js';
 import { Customer, Order } from '../types/index.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Drawer } from '../components/ui/Drawer.js';
 import { SkeletonCard } from '../components/ui/SkeletonCard.js';
+import { useToast } from '../components/ui/Toast.js';
 
 const TABS = [
   { label: 'All', value: 'all' },
@@ -43,6 +45,8 @@ const hashAvatarBg = (name: string) => {
 };
 
 export default function CustomersPage() {
+  const { success, error } = useToast();
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('all');
@@ -58,6 +62,55 @@ export default function CustomersPage() {
   // Ingest state management
   const [isIngestOpen, setIsIngestOpen] = useState(false);
   const [isIngestersLoading, setIsIngestersLoading] = useState(false);
+
+  // Export Customer CSV Database
+  const exportCustomersCSV = () => {
+    try {
+      const headers = [
+        'ID',
+        'Name',
+        'Email',
+        'Phone',
+        'Member Since',
+        'Total Spent (INR)',
+        'Order Count',
+        'Last Order Date',
+        'Tags',
+        'Health Score',
+        'Engagement Score',
+        'Churn Risk'
+      ];
+
+      const rows = customers.map(c => [
+        c.id,
+        `"${c.name.replace(/"/g, '""')}"`,
+        `"${c.email.replace(/"/g, '""')}"`,
+        `"${c.phone}"`,
+        c.memberSince,
+        c.totalSpent,
+        c.orderCount,
+        c.lastOrderDate,
+        `"${c.tags.join(', ')}"`,
+        c.healthScore || 0,
+        c.engagementScore || 0,
+        c.churnRisk || 'Low'
+      ]);
+
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `xeno_crm_customers_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      success('Database Export Complete', 'Customer roster downloaded successfully.');
+    } catch (err: any) {
+      error('Export Failed', err.message || 'Unable to generate customer CSV.');
+    }
+  };
   const [ingestErrorStr, setIngestErrorStr] = useState<string | null>(null);
   const [ingestResult, setIngestResult] = useState<{
     success: boolean;
@@ -214,6 +267,16 @@ export default function CustomersPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Export Customers CSV Button */}
+          <button 
+            onClick={exportCustomersCSV}
+            className="flex text-xs font-semibold py-2 px-4 rounded-lg bg-[#22C55E]/10 hover:bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30 shadow-lg shadow-[#22C55E]/5 transition-all cursor-pointer font-sans items-center gap-1.5 active:scale-95"
+            id="export_customers_csv_btn"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Export Customers
+          </button>
+
           {/* Data Ingestion Utility Trigger */}
           <button 
             onClick={() => setIsIngestOpen(true)}
@@ -401,6 +464,60 @@ export default function CustomersPage() {
                     {tag}
                   </Badge>
                 ))}
+              </div>
+            </div>
+
+            {/* AI PREDICTIVE METRICS & HEALTH SCORE */}
+            <div className="space-y-3" id="drawer_ai_health_score_section">
+              <h4 className="text-[10px] uppercase tracking-wider text-[#FF4500] font-bold font-mono flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> AI Health & Churn Risk
+              </h4>
+              <div className="bg-[#120a0a]/50 border border-[#FF4500]/20 rounded-xl p-4 space-y-4">
+                
+                {/* Visual health score progress bar */}
+                <div>
+                  <div className="flex justify-between items-center text-xs mb-1.5">
+                    <span className="text-stone-400 font-medium">Customer Health Score</span>
+                    <span className="text-[#FF4500] font-bold font-mono">{activeCustomer.healthScore || 0}/100</span>
+                  </div>
+                  <div className="w-full h-2 bg-stone-900 rounded-full overflow-hidden border border-white/5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500 rounded-full transition-all duration-500"
+                      style={{ width: `${activeCustomer.healthScore || 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Substats for Churn Risk and Engagement Score */}
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <span className="text-[9px] text-stone-500 font-mono block uppercase">Churn Risk Level</span>
+                    <span className={`text-xs font-bold font-mono mt-1 px-2 py-0.5 rounded border inline-block ${
+                      activeCustomer.churnRisk === 'High' 
+                        ? 'text-red-400 bg-red-400/10 border-red-400/25' 
+                        : activeCustomer.churnRisk === 'Medium'
+                          ? 'text-amber-400 bg-amber-400/10 border-amber-400/25'
+                          : 'text-green-400 bg-green-400/10 border-green-400/25'
+                    }`}>
+                      {activeCustomer.churnRisk || 'Low'} Risk
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[9px] text-stone-500 font-mono block uppercase">Engagement Score</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-white text-sm font-bold font-mono">{activeCustomer.engagementScore || 0}%</span>
+                      <span className="text-[10px] text-stone-400">({
+                        (activeCustomer.engagementScore || 0) > 75 
+                          ? 'Excellent' 
+                          : (activeCustomer.engagementScore || 0) > 40
+                            ? 'Moderate'
+                            : 'Failing'
+                      })</span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
 

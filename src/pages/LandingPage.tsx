@@ -86,9 +86,7 @@ export default function LandingPage() {
     };
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  return (
+  }, []);  return (
     <div className="bg-editorial text-white min-h-screen overflow-x-hidden relative select-none leading-normal font-sans">
       
       {/* ========================================================= */}
@@ -101,48 +99,44 @@ export default function LandingPage() {
 
         {/* Backdrop Aura orange glow connected beautifully with our brand palette (Microscopic speed 0.1x) */}
         <div 
-          className="absolute rounded-full filter blur-[150px] opacity-25 transition-all duration-750 ease-in-out animate-glow-a"
+          className="absolute rounded-full filter blur-[150px] opacity-20 transition-all duration-750 ease-in-out animate-glow-a"
           style={{
             width: '800px',
             height: '800px',
-            background: 'radial-gradient(circle, rgba(255, 69, 0, 0.25) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(255, 69, 0, 0.2) 0%, transparent 70%)',
             top: '10%',
             right: '-10%',
-            transform: `translateY(${scrollY * 0.01}px)`
           }}
         />
 
-        {/* Layer 2: Fiery Crimson Radial Glow Left (Microscopic speed 0.1x) */}
+        {/* Layer 2: Fiery Crimson Radial Glow Left */}
         <div 
-          className="absolute rounded-full filter blur-[120px] opacity-15 animate-glow-b"
+          className="absolute rounded-full filter blur-[120px] opacity-10 animate-glow-b"
           style={{
             width: '600px',
             height: '600px',
             background: 'radial-gradient(circle, #FF4500 0%, transparent 70%)',
             top: '-5%',
             left: '-10%',
-            transform: `translateY(${scrollY * -0.015}px)`
           }}
         />
 
-        {/* Layer 3: Sunburst Gold Glow bottom (Microscopic speed 0.1x) */}
+        {/* Layer 3: Sunburst Gold Glow bottom */}
         <div 
-          className="absolute rounded-full filter blur-[110px] opacity-15 animate-glow-c"
+          className="absolute rounded-full filter blur-[110px] opacity-10 animate-glow-c"
           style={{
             width: '500px',
             height: '500px',
             background: 'radial-gradient(circle, #FFD700 0%, transparent 80%)',
             top: '35%',
             left: '30%',
-            transform: `translateY(${scrollY * 0.012}px)`
           }}
         />
       </div>
 
-      {/* Background branding text layer moving at standard pace (0.5x) */}
+      {/* Background branding text layer (Extremely subtle, opacity < 1%) */}
       <div 
-        className="absolute left-[5%] top-[14%] text-[24vw] font-bold text-[#FF4500]/[0.025] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-0"
-        style={{ transform: `translateY(${scrollY * 0.15}px)` }}
+        className="absolute left-[5%] top-[14%] text-[24vw] font-bold text-[#FF4500]/[0.006] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-[-10]"
       >
         CRM
       </div>
@@ -159,7 +153,7 @@ export default function LandingPage() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-85 active:scale-98 transition-all select-none group"
           title="Return to Welcome Page"
         >
-          {/* Fluxora Overlapping Geometric Logo */}
+          {/* Xeno CRM Overlapping Geometric Logo */}
           <div className="relative w-6 h-6 flex items-center justify-center mr-1">
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD700] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
@@ -167,7 +161,7 @@ export default function LandingPage() {
             <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
           </div>
           <span className="text-2xl font-bold tracking-tight text-white font-display">
-            Fluxora
+            Xeno <span className="text-[#FF4500]">CRM</span>
           </span>
         </div>
 
@@ -222,25 +216,23 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* HERO SECTION WITH ENLARGED FONTS & IMMERSIVE VIDEO BACKDROP */}
       {/* ========================================================= */}
-      <section className="relative max-w-7xl mx-auto px-6 md:px-12 pt-12 md:pt-20 pb-20 z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      <section className="relative max-w-7xl mx-auto px-6 md:px-12 pt-10 md:pt-16 pb-16 z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         
         {/* ========================================================= */}
-        {/* EXACTLY THREE HIGH-FIDELITY FLOATING 3D GLASS CHAIRS */}
+        {/* FLOATING 3D GLASS CHAIRS - SUBTLE HOVER SENSITIVITY */}
         {/* ========================================================= */}
         
         {/* CHAIR 1: INGESTION NODE CHAIR (Floating Top-Left) */}
         <div 
-          className="absolute z-30 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
+          className="absolute z-10 group transition-all duration-500 pointer-events-none select-none"
           style={{
             left: '-1%',
             top: '4%',
             transform: `
               perspective(1000px) 
-              rotateX(${18 + mousePos.y * 12}deg) 
-              rotateY(${-18 + mousePos.x * 12}deg) 
+              rotateX(${18 + mousePos.y * 6}deg) 
+              rotateY(${-18 + mousePos.x * 6}deg) 
               rotateZ(4deg) 
-              translateY(${scrollY * -0.04}px)
-              translateY(${Math.sin((Date.now() / 1500)) * 6}px)
               scale(0.85)
             `,
           }}
@@ -262,17 +254,15 @@ export default function LandingPage() {
 
         {/* CHAIR 2: COHORT SEGMENTER CHAIR (Floating Center-Left) */}
         <div 
-          className="absolute z-35 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
+          className="absolute z-10 group transition-all duration-500 pointer-events-none select-none"
           style={{
             left: '42%',
             top: '48%',
             transform: `
               perspective(1000px) 
-              rotateX(${15 + mousePos.y * -12}deg) 
-              rotateY(${15 + mousePos.x * -12}deg) 
+              rotateX(${15 + mousePos.y * -6}deg) 
+              rotateY(${15 + mousePos.x * -6}deg) 
               rotateZ(-10deg) 
-              translateY(${scrollY * 0.05}px)
-              translateY(${Math.cos((Date.now() / 1700)) * 7}px)
               scale(0.9)
             `,
           }}
@@ -294,17 +284,15 @@ export default function LandingPage() {
 
         {/* CHAIR 3: ASYNC DISPATCH CHAIR (Floating Bottom-Right) */}
         <div 
-          className="absolute z-35 group cursor-grab active:cursor-grabbing transition-all duration-350 pointer-events-none select-none"
+          className="absolute z-10 group transition-all duration-500 pointer-events-none select-none"
           style={{
             right: '1%',
             bottom: '12%',
             transform: `
               perspective(1000px) 
-              rotateX(${22 + mousePos.y * 14}deg) 
-              rotateY(${12 + mousePos.x * 14}deg) 
+              rotateX(${22 + mousePos.y * 6}deg) 
+              rotateY(${12 + mousePos.x * 6}deg) 
               rotateZ(6deg) 
-              translateY(${scrollY * -0.03}px)
-              translateY(${Math.sin((Date.now() / 1900)) * 6}px)
               scale(0.92)
             `,
           }}
@@ -324,27 +312,24 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* HERO CAPTION LEFT (ENLARGED TYPOGRAPHY MATCHING ATTACHED SCREENSHOT) */}
-        <div 
-          className="lg:col-span-6 space-y-8 transition-transform relative z-25"
-          style={{ transform: `translateY(${scrollY * -0.05}px)` }}
-        >
+        {/* HERO CAPTION LEFT */}
+        <div className="lg:col-span-6 space-y-6 relative z-20">
           <div className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-stone-900/90 border border-white/10 text-[11px] text-stone-400 font-mono tracking-wide font-semibold select-none">
             <span className="w-1.5 h-1.5 rounded-full bg-[#FF4500] animate-ping" />
             High-performance tools driven for impact
           </div>
 
-          <h1 className="text-6xl md:text-[5.5rem] font-semibold text-white tracking-tight leading-[0.95] font-display">
+          <h1 className="text-6xl md:text-[5rem] font-semibold text-white tracking-tight leading-[0.98] font-display">
             Retention <br />
             Crafted for Shoppers, <br />
             Not Just <span className="font-serif italic font-light text-gradient bg-gradient-to-r from-orange-400 via-amber-400 to-[#FF4500] bg-clip-text text-transparent">Databases</span>
           </h1>
 
-          <p className="text-stone-300 text-sm md:text-base max-w-lg font-light leading-relaxed font-sans">
+          <p className="text-stone-350 text-sm md:text-sm max-w-lg font-light leading-relaxed font-sans">
             We build intelligent, hyper-personalized engagement pipelines shaped by real-time behavioral data and predictive scaling.
           </p>
 
-          <div className="flex items-center gap-6 flex-wrap pt-4">
+          <div className="flex items-center gap-6 flex-wrap pt-2">
             {/* Solid orange button with inside circle arrow */}
             <button
               onClick={() => navigate('/dashboard')}
@@ -371,25 +356,22 @@ export default function LandingPage() {
           </div>
 
           {/* Cards with an Asterisk from screenshot bottom left */}
-          <div className="grid grid-cols-2 gap-4 max-w-sm pt-6 relative z-30">
-            <div className="p-5 rounded-2xl bg-[#0d0707]/60 backdrop-blur-md border border-white/8 relative hover:border-[#FF4500]/25 transition-all group">
+          <div className="grid grid-cols-2 gap-4 max-w-sm pt-4 relative z-20">
+            <div className="p-4 rounded-2xl bg-[#0d0707]/60 backdrop-blur-md border border-white/8 relative hover:border-[#FF4500]/25 transition-all group">
               <span className="absolute top-4 right-4 text-[#FF4500]/55 font-display text-lg tracking-tight">*</span>
-              <div className="text-3xl font-bold tracking-tight text-white font-sans">1.2M+</div>
-              <div className="text-[11px] text-stone-400 mt-1 font-medium font-sans">Profile Ingestion Events</div>
+              <div className="text-2xl font-bold tracking-tight text-white font-sans">1.2M+</div>
+              <div className="text-[10px] text-stone-400 mt-1 font-medium font-sans">Profile Ingestion Events</div>
             </div>
-            <div className="p-5 rounded-2xl bg-[#0d0707]/60 backdrop-blur-md border border-white/8 relative hover:border-[#FF4500]/25 transition-all group">
+            <div className="p-4 rounded-2xl bg-[#0d0707]/60 backdrop-blur-md border border-white/8 relative hover:border-[#FF4500]/25 transition-all group">
               <span className="absolute top-4 right-4 text-[#FF4500]/55 font-display text-lg tracking-tight">*</span>
-              <div className="text-3xl font-bold tracking-tight text-white font-sans">99.2%</div>
-              <div className="text-[11px] text-stone-400 mt-1 font-medium font-sans">Loop Delivery Success</div>
+              <div className="text-2xl font-bold tracking-tight text-white font-sans">99.2%</div>
+              <div className="text-[10px] text-stone-400 mt-1 font-medium font-sans">Loop Delivery Success</div>
             </div>
           </div>
         </div>
 
         {/* HERO RIGHT: STANDALONE HIGH-FIDELITY CINEMATIC VIDEO PLAYBACK LOOP */}
-        <div 
-          className="lg:col-span-6 relative flex flex-col items-center justify-center min-h-[400px] z-10 transition-transform duration-75 lg:-mt-16 -mt-6"
-          style={{ transform: `translateY(${-35 + scrollY * 0.1}px)` }}
-        >
+        <div className="lg:col-span-6 relative flex flex-col items-center justify-center z-20 lg:mt-0 mt-6 pb-4">
           <div className="w-full max-w-[480px] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black">
             <video
               ref={videoRef}
@@ -409,12 +391,12 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* SECTION 2: FRAMEWORK ARCHITECTURE FEATURE CARDS */}
       {/* ========================================================= */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-20 border-t border-white/6" id="features">
-        <div className="text-center space-y-3 max-w-xl mx-auto mb-16">
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-16 border-t border-white/6" id="features">
+        <div className="text-center space-y-3 max-w-xl mx-auto mb-12">
           <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">CRM System Architecture</span>
-          <h2 className="text-3xl font-extrabold tracking-tight font-display">Full-Stack Decoupled Loop</h2>
-          <p className="text-stone-400 text-sm font-light leading-normal">
-            The Xeno setup incorporates functional client segments and persistent server webhooks on port 3000.
+          <h2 className="text-3xl font-extrabold tracking-tight font-display text-white">Full-Stack Decoupled Loop</h2>
+          <p className="text-stone-400 text-xs font-light leading-normal">
+            The Xeno CRM platform incorporates highly functional client segments and real-time backend messaging adapters on port 3000.
           </p>
         </div>
 
@@ -509,33 +491,26 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* SECTION 3: ATTACH PRECISE LOGOS FOR WHATSAPP, MAIL, RCS */}
       {/* ========================================================= */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-28 border-t border-white/6 overflow-visible" id="delivery-channels">
+      <section className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-16 border-t border-white/6 overflow-hidden" id="delivery-channels">
         
-        {/* Giant background text scrolling at standard pace (0.5x), allowing cards to overlap on scroll */}
+        {/* Giant background text: static background watermark, 0.6% opacity, behind all layouts */}
         <div 
-          className="absolute left-6 top-1/3 text-[13vw] font-bold text-[#FF4500]/[0.018] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-0"
-          style={{ transform: `translateY(${scrollY * 0.5}px)` }}
+          className="absolute left-6 top-1/4 text-[13vw] font-bold text-[#FF4500]/[0.006] font-display select-none pointer-events-none tracking-tighter uppercase leading-none z-[-2]"
         >
-          PRISM HUB
+          XENO ENGINE
         </div>
 
-        {/* Header information - moves at standard pace (0.5x) */}
-        <div 
-          className="text-center space-y-3 max-w-xl mx-auto mb-20 relative z-10 transition-transform duration-75"
-          style={{ transform: `translateY(${scrollY * 0.5}px)` }}
-        >
-          <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">Cross-Channel Dispatch Ecosystem</span>
-          <h2 className="text-4xl font-extrabold tracking-tight font-display text-white">Prism Hub Gateway Delivery</h2>
-          <p className="text-stone-400 text-sm font-light leading-normal">
-            Interact with the actual brand gateways and check real-time payload visual templates synced dynamically within our marketing loop.
+        {/* Header information */}
+        <div className="text-center space-y-3 max-w-xl mx-auto mb-12 relative z-10">
+          <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">Cross-Channel Xeno Engine</span>
+          <h2 className="text-3xl font-extrabold tracking-tight font-display text-white">Xeno Campaign Engine</h2>
+          <p className="text-stone-400 text-xs font-light leading-normal">
+            Interact with actual brand channels and check real-time payload templates synced dynamically within our marketing loop.
           </p>
         </div>
 
-        {/* 3 Showcase boxes representing WhatsApp, Email, and RCS Gateways as requested (Accelerated Pace 1.2x) */}
-        <div 
-          className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-25 transition-transform duration-75"
-          style={{ transform: `translateY(${scrollY * -0.2}px)` }}
-        >
+        {/* 3 Showcase boxes representing WhatsApp, Email, and RCS Channels as requested */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-10">
           
           {/* WhatsApp Brand Terminal Showcase */}
           <div 
@@ -554,7 +529,7 @@ export default function LandingPage() {
                     <MessageSquare className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white tracking-tight">WhatsApp Gateway</h4>
+                    <h4 className="text-sm font-bold text-white tracking-tight">WhatsApp Channel</h4>
                     <span className="text-[9.5px] font-mono text-stone-500 uppercase">Interactive API Platform</span>
                   </div>
                 </div>

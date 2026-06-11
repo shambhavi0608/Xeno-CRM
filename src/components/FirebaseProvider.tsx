@@ -15,16 +15,18 @@ import {
   setDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase.js';
+import { auth, db, testConnectionAfterAuth } from '../lib/firebase.js';
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: any;
   loading: boolean;
   login: (email: string, pass: string) => Promise<any>;
   register: (email: string, pass: string, name: string) => Promise<any>;
   loginAnonymously: () => Promise<any>;
+  loginAsDemo: () => void;
   logout: () => Promise<void>;
   isSeeding: boolean;
+  isDemo: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,7 +112,7 @@ export const SEED_CAMPAIGNS = [
   }
 ];
 
-const SEED_ORDERS_MAPPING: Record<string, { count: number; total: number; lastDate: string }> = {
+export const SEED_ORDERS_MAPPING: Record<string, { count: number; total: number; lastDate: string }> = {
   c1: { count: 6, total: 12500, lastDate: '2026-06-08' },
   c2: { count: 4, total: 8900, lastDate: '2026-06-05' },
   c3: { count: 3, total: 4500, lastDate: '2026-05-20' },
@@ -192,20 +194,38 @@ async function seedFirestoreCollections(uid: string) {
 
 export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [demoUser, setDemoUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
 
   useEffect(() => {
+    // 1. Recover/Check localStorage Demo Mode status at session bootstrap
+    const isLocalDemoActive = localStorage.getItem('xeno_demo_mode') === 'true';
+    if (isLocalDemoActive) {
+      setDemoUser({
+        uid: 'demo-local-user',
+        email: 'demo@xeno.com',
+        displayName: 'Demo Roaster Admin',
+        emailVerified: true,
+        isAnonymous: false
+      });
+      setLoading(false);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // Authenticated! Check if user has initialized customer list
+        // Real authenticated firebase user session detected - bypass any local demo
         setUser(currentUser);
+        setDemoUser(null);
+        localStorage.removeItem('xeno_demo_mode');
         setLoading(true);
         try {
+          // Safe background connectivity probe to users/{uid} to avoid unprotected path rules issues
+          await testConnectionAfterAuth(currentUser.uid);
+
           const customersRef = collection(db, 'users', currentUser.uid, 'customers');
           const snap = await getDocs(customersRef);
           if (snap.empty) {
-            // Seed base roastery dataset so this specific credentials account looks marvelous out-of-the-box
             setIsSeeding(true);
             await seedFirestoreCollections(currentUser.uid);
             setIsSeeding(false);
@@ -216,32 +236,70 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
       }
-      setLoading(false);
+      // Only set loading to false if we are not still processing local demo
+      if (!localStorage.getItem('xeno_demo_mode')) {
+        setLoading(false);
+      }
     });
 
     return unsubscribe;
   }, []);
 
-  const login = (email: string, pass: string) => {
+  const login = async (email: string, pass: string) => {
+    localStorage.removeItem('xeno_demo_mode');
+    setDemoUser(null);
     return signInWithEmailAndPassword(auth, email, pass);
   };
 
   const register = async (email: string, pass: string, name: string) => {
+    localStorage.removeItem('xeno_demo_mode');
+    setDemoUser(null);
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    // Profile is empty initially, so our auth state subscription listener will automatically seed it!
     return cred;
   };
 
   const loginAnonymously = () => {
+    localStorage.removeItem('xeno_demo_mode');
+    setDemoUser(null);
     return signInAnonymously(auth);
   };
 
-  const logout = () => {
-    return firebaseSignOut(auth);
+  const loginAsDemo = () => {
+    localStorage.setItem('xeno_demo_mode', 'true');
+    setDemoUser({
+      uid: 'demo-local-user',
+      email: 'demo@xeno.com',
+      displayName: 'Demo Roaster Admin',
+      emailVerified: true,
+      isAnonymous: false
+    });
+    setUser(null);
   };
 
+  const logout = async () => {
+    localStorage.removeItem('xeno_demo_mode');
+    setDemoUser(null);
+    setUser(null);
+    await firebaseSignOut(auth);
+  };
+
+  const activeUser = demoUser || user;
+  const isDemo = !!demoUser;
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginAnonymously, logout, isSeeding }}>
+    <AuthContext.Provider
+      value={{
+        user: activeUser,
+        loading,
+        login,
+        register,
+        loginAnonymously,
+        loginAsDemo,
+        logout,
+        isSeeding,
+        isDemo
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

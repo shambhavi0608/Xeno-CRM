@@ -25,7 +25,7 @@ export default function AppShell({ children, title }: AppShellProps) {
   const location = useLocation();
   const { success, error, info } = useToast();
   const [isRunningDemo, setIsRunningDemo] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, isDemo } = useAuth();
 
   // High performance demo automation trigger
   const handleRunDemo = async () => {
@@ -178,10 +178,17 @@ export default function AppShell({ children, title }: AppShellProps) {
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="flex items-center gap-1.5 px-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-            <span className="text-[10px] font-mono text-[#22C55E] uppercase tracking-wider">Cloud Firestore Active</span>
-          </div>
+          {isDemo ? (
+            <div className="flex items-center gap-1.5 px-2 bg-orange-950/20 border border-orange-500/20 rounded-md py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              <span className="text-[9px] font-mono text-orange-400 uppercase tracking-wider font-bold">Local Demo Mode</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+              <span className="text-[10px] font-mono text-[#22C55E] uppercase tracking-wider">Cloud Firestore Active</span>
+            </div>
+          )}
         </div>
 
       </aside>
@@ -197,6 +204,13 @@ export default function AppShell({ children, title }: AppShellProps) {
           </h1>
 
           <div className="flex items-center gap-4">
+            {isDemo && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold bg-orange-500/10 border border-orange-500/40 text-orange-400 font-sans tracking-wide shadow-sm animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                <span>DEMO MODE</span>
+              </div>
+            )}
+
             {/* Search/Notification triggers (decorative placeholders) */}
             <button className="p-1.5 text-[#606060] hover:text-[#A0A0A0] transition-colors" aria-label="Search records">
               <Search className="w-4 h-4" />

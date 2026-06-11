@@ -15,17 +15,18 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth();
 
-// Test the cloud Firestore connection immediately
-async function testConnection() {
+// Safe connection test after user authentication to verify database connectivity.
+// Reads the current user's document path (which is fully allowed by rules) to ensure
+// no permission-denied console noise.
+export async function testConnectionAfterAuth(uid: string) {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, 'users', uid));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn("Please check your Firebase configuration: Firestore Client is offline.");
     }
   }
 }
-testConnection();
 
 // Centralized Firestore Error Handler required by the standard skill specification
 export enum OperationType {
