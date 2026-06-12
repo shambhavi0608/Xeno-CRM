@@ -78,15 +78,7 @@ async function generateContentWithRetry(params: {
       } catch (e: any) {
         lastError = e;
         const errMsg = typeof e === 'object' ? JSON.stringify(e) : (e?.message || e?.status || String(e));
-        console.warn(`[Gemini API] Model ${modelName} (attempt ${attempt}/3) failed: ${errMsg}`);
         
-        // Detect if error is an API key error, 400 or 403 request error. Fast-fail since retries won't help!
-        const isAuthError = errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('400') || e?.status === 400 || e?.status === 403 || e?.code === 400 || e?.code === 403;
-        if (isAuthError) {
-          console.warn('[Gemini API] Request error or invalid API key. Fast-failing cascade.');
-          throw e; // Fast fail immediately to let robust fallbacks run
-        }
-
         // Detect if the server is busy / experiencing high demand (503 / UNAVAILABLE)
         const isServerBusy = errMsg.includes('503') || 
                              errMsg.includes('UNAVAILABLE') || 
@@ -96,9 +88,30 @@ async function generateContentWithRetry(params: {
                              e?.code === 503 ||
                              (e?.error && (e.error?.code === 503 || e.error?.status === 'UNAVAILABLE'));
 
+        // Detect if error is a rate limit / quota exceeded (429 / RESOURCE_EXHAUSTED)
+        const isRateLimited = errMsg.includes('429') ||
+                              errMsg.includes('RESOURCE_EXHAUSTED') ||
+                              e?.status === 429 ||
+                              e?.code === 429 ||
+                              (e?.error && (e.error?.code === 429 || e.error?.status === 'RESOURCE_EXHAUSTED'));
+
+        if (isRateLimited) {
+          console.log(`[Gemini API] Model ${modelName} returned 429 (Rate Limit). Skipping retries to cascade gracefully...`);
+          break; // Cascade to next model immediately
+        }
+
         if (isServerBusy) {
-          console.log(`[Gemini API] Model ${modelName} is experiencing high demand (503). Skipping immediate retries to cascade to next model...`);
+          console.log(`[Gemini API] Model ${modelName} is experiencing high demand (503). Skipping retries to cascade gracefully...`);
           break; // Stop retrying this model and proceed to the next model in the outer cascade loop
+        }
+
+        console.warn(`[Gemini API] Model ${modelName} (attempt ${attempt}/3) encountered error: ${errMsg}`);
+        
+        // Detect if error is an API key error, 400 or 403 request error. Fast-fail since retries won't help!
+        const isAuthError = errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('400') || e?.status === 400 || e?.status === 403 || e?.code === 400 || e?.code === 403;
+        if (isAuthError) {
+          console.warn('[Gemini API] Request error or invalid API key. Fast-failing cascade.');
+          throw e; // Fast fail immediately to let robust fallbacks run
         }
 
         // Brief delay before retry with backoff for non-503 temporary errors
@@ -165,6 +178,14 @@ app.get('/api/customers/:id', (req, res) => {
   res.json({ customer, orders: customerOrders });
 });
 
+// 3b. DELETE CUSTOMER
+app.delete('/api/customers/:id', (req, res) => {
+  const customers = getCustomers();
+  const filtered = customers.filter(c => c.id !== req.params.id);
+  writeCustomers(filtered);
+  res.json({ success: true, message: 'Customer successfully deleted' });
+});
+
 // 4. GET CAMPAIGNS
 app.get('/api/campaigns', (req, res) => {
   const campaigns = getCampaigns();
@@ -186,6 +207,14 @@ app.get('/api/campaigns/:id', (req, res) => {
     return res.status(404).json({ message: 'Campaign not found' });
   }
   res.json(campaign);
+});
+
+// 5b. DELETE CAMPAIGN
+app.delete('/api/campaigns/:id', (req, res) => {
+  const campaigns = getCampaigns();
+  const filtered = campaigns.filter(c => c.campaignId !== req.params.id);
+  writeCampaigns(filtered);
+  res.json({ success: true, message: 'Campaign successfully deleted' });
 });
 
 // 6. CREATE DRAFT CAMPAIGN
@@ -894,6 +923,15 @@ app.post('/api/callback', (req, res) => {
 
   writeCampaigns(campaigns);
 
+  // Trigger conversion order simulation when a customer clicks
+  if (status === 'clicked') {
+    if (Math.random() < 0.35) {
+      setTimeout(() => {
+        handleAttributedOrder(campaignId, customerId);
+      }, Math.random() * 2000 + 1000);
+    }
+  }
+
   res.json({ success: true, oldStatus, newStatus: status, campaignStats: campaign });
 });
 
@@ -905,53 +943,22 @@ app.post('/api/send', (req, res) => {
     return res.status(400).json({ message: 'Missing campaignId or targetCustomers list' });
   }
 
-  // We immediately respond OK to satisfy async decoupled architecture
-  res.json({ status: 'queued', message: `Campaign sending initiated for ${targetCustomers.length} customers.` });
-
-  // Now, fire off separate non-blocking asynchronous callback pipelines with timeouts!
-  targetCustomers.forEach((cust: { id: string; name: string }) => {
-    // 1. Sent Callback (very fast ~400ms)
-    setTimeout(() => {
-      triggerCallback(campaignId, cust.id, 'sent');
-    }, Math.random() * 500 + 200);
-
-    // 2. Delivery Evaluation (~1500ms to 3000ms)
-    const outcomeRoll = Math.random(); // 0 to 1
-    
-    setTimeout(() => {
-      if (outcomeRoll < 0.10) {
-        // 10% Failed
-        triggerCallback(campaignId, cust.id, 'failed');
-      } else {
-        // 90% Delivered (Sum: Clicked 5%, Opened 15%, Delivered 70%)
-        triggerCallback(campaignId, cust.id, 'delivered');
-
-        // 3. Open Evaluation (~3500ms to 6000ms)
-        const totalOpenRate = 0.222; // 20% of delivered users open
-        if (outcomeRoll >= 0.10 && outcomeRoll < 0.35) {
-          setTimeout(() => {
-            triggerCallback(campaignId, cust.id, 'opened');
-
-            // 4. Click Evaluation (~7000ms to 10000ms)
-            const clickTrigger = Math.random();
-            if (clickTrigger < 0.25) { // 25% of opened users click
-              setTimeout(() => {
-                triggerCallback(campaignId, cust.id, 'clicked');
-
-                // 5. ATTRIBUTED CONVERSION ORDER (Magical touch!)
-                // With 30% conversion probability from a click, shopper makes a direct order!
-                if (Math.random() < 0.35) {
-                  setTimeout(() => {
-                    handleAttributedOrder(campaignId, cust.id);
-                  }, Math.random() * 2000 + 1000);
-                }
-              }, Math.random() * 3000 + 2000);
-            }
-          }, Math.random() * 2000 + 2000);
-        }
-      }
-    }, Math.random() * 1500 + 1500);
+  // Forward details to the external, decoupled channelService simulation running on port 3001
+  fetch('http://localhost:3001/channel/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignId, channel, targetCustomers })
+  })
+  .then(resp => {
+    if (!resp.ok) {
+      console.error('[server.ts] Failed to forward sending process to channelService on 3001:', resp.statusText);
+    }
+  })
+  .catch(err => {
+    console.error('[server.ts] Error connecting to channelService on port 3001:', err.message);
   });
+
+  res.json({ status: 'queued', message: `Campaign sending initiated for ${targetCustomers.length} customers over decoupled service.` });
 });
 
 // Helper to update Campaign when a Conversion Order occurs!
@@ -992,22 +999,6 @@ function handleAttributedOrder(campaignId: string, customerId: string) {
   writeCampaigns(campaigns);
 
   console.log(`[CONVERSION SUCCESS] Campaign ${campaignId} successfully converted customer ${customerId}! Order ₹${orderAmount} placed.`);
-}
-
-// Function to call /callback internally (simulating decoupled webhook loop)
-function triggerCallback(campaignId: string, customerId: string, status: string) {
-  // We mock a POST webhook call to our same server API
-  const url = `http://localhost:${PORT}/api/callback`;
-  
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ campaignId, customerId, status })
-  })
-  .then(res => res.json())
-  .catch(err => {
-    // console.error('[Webhook Simulation Error]', err.message);
-  });
 }
 
 // 12. LAUNCH CAMPAIGN ROUTE

@@ -247,7 +247,10 @@ export async function fetchCustomers(search = '', tag = 'all'): Promise<Customer
       const snap = await getDocs(customersRef);
       const list: Customer[] = [];
       snap.forEach((docSnap) => {
-        list.push(docSnap.data() as Customer);
+        list.push({
+          ...(docSnap.data() as Customer),
+          id: docSnap.id
+        });
       });
 
       const enrichedList = list.map(c => ({
@@ -365,7 +368,10 @@ export async function fetchCampaigns(status = 'all'): Promise<Campaign[]> {
       const snap = await getDocs(collection(db, 'users', uid, 'campaigns'));
       const list: Campaign[] = [];
       snap.forEach((d) => {
-        list.push(d.data() as Campaign);
+        list.push({
+          ...(d.data() as Campaign),
+          campaignId: d.id
+        });
       });
 
       let filtered = [...list];
@@ -1524,12 +1530,20 @@ export async function deleteCustomer(id: string): Promise<void> {
   }
 
   const uid = getUid();
+  const path = uid ? `users/${uid}/customers/${id}` : null;
+  console.log('[TRACE CUSTOMER DELETE] Start:', { uid, id, path });
+  
   if (uid) {
     try {
       const custRef = doc(db, 'users', uid, 'customers', id);
+      console.log('[TRACE CUSTOMER DELETE] Before deleteDoc()', { path });
       await deleteDoc(custRef);
+      console.log('[TRACE CUSTOMER DELETE] After deleteDoc() SUCCESS');
       return;
-    } catch (err) {
+    } catch (err: any) {
+      console.error('[TRACE CUSTOMER DELETE] Caught error:', err);
+      console.error('[TRACE CUSTOMER DELETE] Error code:', err?.code);
+      console.error('[TRACE CUSTOMER DELETE] Error message:', err?.message);
       handleFirestoreError(err, OperationType.DELETE, `users/${uid}/customers/${id}`);
     }
   }
@@ -1539,5 +1553,40 @@ export async function deleteCustomer(id: string): Promise<void> {
     method: 'DELETE'
   });
   if (!res.ok) throw new Error('Failed to delete customer');
+}
+
+export async function deleteCampaign(campaignId: string): Promise<void> {
+  if (isDemoMode()) {
+    initLocalDemoStorage();
+    const localCampaigns: Campaign[] = JSON.parse(localStorage.getItem('xeno_demo_campaigns') || '[]');
+    const filtered = localCampaigns.filter(c => c.campaignId !== campaignId);
+    localStorage.setItem('xeno_demo_campaigns', JSON.stringify(filtered));
+    return;
+  }
+
+  const uid = getUid();
+  const path = uid ? `users/${uid}/campaigns/${campaignId}` : null;
+  console.log('[TRACE CAMPAIGN DELETE] Start:', { uid, campaignId, path });
+
+  if (uid) {
+    try {
+      const campaignRef = doc(db, 'users', uid, 'campaigns', campaignId);
+      console.log('[TRACE CAMPAIGN DELETE] Before deleteDoc()', { path });
+      await deleteDoc(campaignRef);
+      console.log('[TRACE CAMPAIGN DELETE] After deleteDoc() SUCCESS');
+      return;
+    } catch (err: any) {
+      console.error('[TRACE CAMPAIGN DELETE] Caught error:', err);
+      console.error('[TRACE CAMPAIGN DELETE] Error code:', err?.code);
+      console.error('[TRACE CAMPAIGN DELETE] Error message:', err?.message);
+      handleFirestoreError(err, OperationType.DELETE, `users/${uid}/campaigns/${campaignId}`);
+    }
+  }
+
+  // Server Fallback
+  const res = await fetch(`${API_BASE}/campaigns/${campaignId}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Failed to delete campaign');
 }
 

@@ -11,9 +11,10 @@ import {
   Eye, 
   BarChart2, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
-import { fetchCampaigns, launchCampaign } from '../lib/api.js';
+import { fetchCampaigns, launchCampaign, deleteCampaign } from '../lib/api.js';
 import { Campaign } from '../types/index.js';
 import { ChannelBadge } from '../components/ui/ChannelBadge.js';
 import { Badge } from '../components/ui/Badge.js';
@@ -29,6 +30,7 @@ export default function CampaignsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const loadCampaigns = async (silent = false) => {
     try {
@@ -63,6 +65,20 @@ export default function CampaignsPage() {
       loadCampaigns(true);
     } catch (err: any) {
       error('Launch failed', err.message);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaignId: string) => {
+    // Optimistic UI state removal
+    setCampaigns(prev => prev.filter(c => c.campaignId !== campaignId));
+
+    try {
+      await deleteCampaign(campaignId);
+      success('Campaign Deleted', 'Campaign successfully removed.');
+      await loadCampaigns(true);
+    } catch (err: any) {
+      error('Deletion Failed', err.message || 'An error occurred.');
+      await loadCampaigns(true); // rollback or re-sync
     }
   };
 
@@ -240,7 +256,19 @@ export default function CampaignsPage() {
                     <span>{c.createdAt}</span>
                   </div>
 
-                  <div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmId(c.campaignId);
+                      }}
+                      className="p-1.5 rounded-lg text-[#EF4444] hover:bg-[#EF4444]/10 transition-all cursor-pointer border border-[#EF4444]/20 hover:border-[#EF4444]/45 active:scale-90"
+                      title="Delete Campaign"
+                      id={`delete_campaign_btn_${c.campaignId}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
                     {c.status === 'draft' ? (
                       <button
                         onClick={() => handleLaunchCampaign(c.campaignId)}
@@ -269,6 +297,40 @@ export default function CampaignsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* CUSTOM REACTIONAL DELETE DIALOG FOR IFRAMES */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-[#161616] border border-white/10 p-6 shadow-2xl overflow-hidden flex flex-col gap-4 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-400/10 flex items-center justify-center text-[#EF4444]">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white font-sans">Delete Campaign</h3>
+              <p className="mt-2 text-xs text-stone-400 font-sans leading-relaxed">
+                Are you absolutely sure you want to delete this campaign? All metrics, delivery records, and attribution history will be lost. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl text-stone-200 hover:text-white bg-white/5 hover:bg-white/10 transition-all font-semibold font-sans text-xs cursor-pointer border border-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteCampaign(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl text-white bg-[#EF4444] hover:bg-[#EF4444]/90 transition-all font-semibold font-sans text-xs cursor-pointer shadow-lg shadow-[#EF4444]/10"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -79,6 +79,8 @@ export default function CustomersPage() {
     memberSince: ''
   });
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const handleAddCustomerClick = () => {
     setFormType('create');
     setFormFields({
@@ -156,17 +158,18 @@ export default function CustomersPage() {
   };
 
   const handleDeleteCustomerClick = async (customerId: string) => {
-    if (!window.confirm('Are you absolutely sure you want to delete this customer? All their cloud roster details will be purged.')) {
-      return;
-    }
+    // Optimistic UI update: remove customer from list immediately
+    setCustomers((prev) => prev.filter((c) => c.id !== customerId));
+    setActiveCustomer(null);
+    setIsDrawerOpen(false);
 
     try {
       await deleteCustomer(customerId);
       success('Customer Deleted', 'Roster file successfully removed.');
-      setIsDrawerOpen(false);
-      loadCustomers();
+      await loadCustomers();
     } catch (err: any) {
       error('Deletion Failed', err.message || 'An error occurred.');
+      await loadCustomers(); // reload to rollback or sync
     }
   };
 
@@ -723,7 +726,7 @@ export default function CustomersPage() {
                 Edit Profile
               </button>
               <button
-                onClick={() => handleDeleteCustomerClick(activeCustomer.id)}
+                onClick={() => setDeleteConfirmId(activeCustomer.id)}
                 className="py-2 px-4 rounded-xl text-[#EF4444] bg-[#EF4444]/5 hover:bg-[#EF4444]/15 border border-[#EF4444]/20 hover:border-[#EF4444]/35 transition-all font-semibold font-sans text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                 id="delete_customer_btn"
               >
@@ -1056,6 +1059,40 @@ export default function CustomersPage() {
           </div>
         </form>
       </Drawer>
+
+      {/* CUSTOM REACTIONAL DELETE DIALOG FOR IFRAMES */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-[#161616] border border-white/10 p-6 shadow-2xl overflow-hidden flex flex-col gap-4 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-red-400/10 flex items-center justify-center text-[#EF4444]">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white font-sans">Delete Customer Profile</h3>
+              <p className="mt-2 text-xs text-stone-400 font-sans leading-relaxed">
+                Are you absolutely sure you want to delete this customer? All their cloud roster details and order references will be purged. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl text-stone-200 hover:text-white bg-white/5 hover:bg-white/10 transition-all font-semibold font-sans text-xs cursor-pointer border border-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteCustomerClick(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl text-white bg-[#EF4444] hover:bg-[#EF4444]/90 transition-all font-semibold font-sans text-xs cursor-pointer shadow-lg shadow-[#EF4444]/10"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
