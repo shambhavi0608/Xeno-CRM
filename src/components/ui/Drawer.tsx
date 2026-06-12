@@ -7,9 +7,10 @@ interface DrawerProps {
   title: string;
   children: React.ReactNode;
   width?: string;
+  noScroll?: boolean;
 }
 
-export function Drawer({ isOpen, onClose, title, children, width = 'max-w-md' }: DrawerProps) {
+export function Drawer({ isOpen, onClose, title, children, width = 'max-w-md', noScroll = false }: DrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
   // Close on ESC key press
@@ -59,7 +60,7 @@ export function Drawer({ isOpen, onClose, title, children, width = 'max-w-md' }:
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className={`flex-1 flex flex-col ${noScroll ? 'overflow-hidden' : 'overflow-y-auto custom-scrollbar'}`}>
             {children}
           </div>
         </div>

@@ -218,7 +218,7 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       loadDashboardData(true);
-    }, 5000);
+    }, 20000);
 
     return () => clearInterval(interval);
   }, []);

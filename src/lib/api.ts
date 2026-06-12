@@ -22,13 +22,17 @@ import {
   updateDoc, 
   query, 
   where,
-  writeBatch
+  writeBatch,
+  deleteDoc
 } from 'firebase/firestore';
 
 const API_BASE = '/api';
 
 // Helper to check if Demo Mode is active
 export function isDemoMode(): boolean {
+  if (auth?.currentUser) {
+    return false;
+  }
   return localStorage.getItem('xeno_demo_mode') === 'true';
 }
 
@@ -314,13 +318,12 @@ export async function fetchCustomerDetails(id: string): Promise<{ customer: Cust
       const customer = { ...customerRaw, ...calculateCustomerHealth(customerRaw) };
 
       const ordersRef = collection(db, 'users', uid, 'orders');
-      const ordersSnap = await getDocs(ordersRef);
-      const allOrders: Order[] = [];
+      const q = query(ordersRef, where('customerId', '==', id));
+      const ordersSnap = await getDocs(q);
+      const customerOrders: Order[] = [];
       ordersSnap.forEach((oSnap) => {
-        allOrders.push(oSnap.data() as Order);
+        customerOrders.push(oSnap.data() as Order);
       });
-
-      const customerOrders = allOrders.filter(o => o.customerId === id);
       return { customer, orders: customerOrders };
     } catch (err) {
       handleFirestoreError(err, OperationType.GET, `users/${uid}/customers/${id}`);
@@ -782,6 +785,8 @@ export async function suggestSegment(prompt: string): Promise<AISuggestion> {
 
   const uid = getUid();
   if (uid) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     try {
       // We read latest cloud customers
       const custSnap = await getDocs(collection(db, 'users', uid, 'customers'));
@@ -792,12 +797,15 @@ export async function suggestSegment(prompt: string): Promise<AISuggestion> {
       const res = await fetch(`${API_BASE}/segment/suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, customers }) // pass active list
+        body: JSON.stringify({ prompt, customers }), // pass active list
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error();
       
       return res.json();
     } catch (e) {
+      clearTimeout(timeoutId);
       // Direct in-memory heuristics fallback mapping for instant responsive sandbox
       const p = prompt.toLowerCase();
       const custSnap = await getDocs(collection(db, 'users', uid, 'customers'));
@@ -827,26 +835,94 @@ export async function suggestSegment(prompt: string): Promise<AISuggestion> {
     }
   }
 
-  const res = await fetch(`${API_BASE}/segment/suggest`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt })
-  });
-  if (!res.ok) throw new Error('Failed to query AI segmentation engine');
-  return res.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${API_BASE}/segment/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('Failed to query AI segmentation engine');
+    return res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // Direct server/cloud heuristics fallback standard layout
+    const res = await fetch(`${API_BASE}/customers`);
+    const customersList = res.ok ? await res.json() : [];
+    return {
+      explanation: 'Targeting regular customers (Heuristic Fallback)',
+      rules: ['All customers rostered'],
+      count: customersList.length,
+      customers: customersList
+    };
+  }
 }
 
 // -------------------------------------------------------------
 // 9. AI GENERATIVE DRAFT MESSAGE TEXTS
 // -------------------------------------------------------------
 export async function generateAICopy(goal: string, audienceExplanation = ''): Promise<AIMessages> {
-  const res = await fetch(`${API_BASE}/campaigns/generate-copy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ goal, audienceExplanation })
-  });
-  if (!res.ok) throw new Error('Failed to generate AI personalization copy');
-  return res.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(`${API_BASE}/campaigns/generate-copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ goal, audienceExplanation }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) throw new Error('Failed to generate AI personalization copy');
+    return res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn('AI Copy generation failed, reverting to heuristic template', err);
+    // Fallback templates from the backend server matching '/api/campaigns/generate-copy'
+    const g = goal.toLowerCase();
+    let whatsapp = `Hey {name}! \u2728 We have something special for you. Just because you are a VIP, enjoy 15% off on our fresh releases. Use: VIP15 at checkout! \u2615\ufe0f xeno.coffee/vip`;
+    let sms = `Hey {name}! Enjoy 15% off our premium single-origins with code VIP15. Shop now: xeno.coffee/vip`;
+    let email = {
+      subject: `Hey {name}, your VIP perks have arrived! \u2615\ufe0f`,
+      body: `Hi {name},\n\nWe love having you as a core customer of our brand! To show our appreciation, here is a custom VIP coupon code: VIP15.\n\nEnjoy 15% off our entire stock of fresh roasts and brewers for the next 7 days.\n\nWarmly,\nYour Roastery Crew`
+    };
+    let rcs = `Hey {name}! \ud83c\udf1f Exclusive single-origin drop for you. Order now for 15% off using code VIP15!`;
+    let recommended: 'whatsapp' | 'sms' | 'email' | 'rcs' = 'whatsapp';
+    let reason = 'WhatsApp is highly recommended for VIP clients because message deliverability is guaranteed and CTR rates average 25%+.';
+
+    if (g.includes('win back') || g.includes('winback') || g.includes('inactive') || g.includes('miss')) {
+      whatsapp = `Hi {name}! \ud83d\udc94 We miss your roastery updates! Here is a flat 20% discount coupon to welcome you back: COMEBACK20. Valid this week! xeno.coffee/return`;
+      sms = `Hey {name}! We miss you! Enjoy 20% off your next checkout with code COMEBACK20. Order here: xeno.coffee/return`;
+      email = {
+        subject: `We miss you, {name}! Let us treat you to 20% off \u2764\ufe0f`,
+        body: `Hi {name},\n\nIt has been a while since your last order, and we would love to have you back! We have updated our roastery menu with incredibly high-grade origins.\n\nTreat yourself to 20% off your next purchase using code: COMEBACK20.\n\nLet's brew something amazing together!`
+      };
+      rcs = `Hi {name}! We miss you! \u2764\ufe0f Here is 20% off your next roastery pack with code COMEBACK20.`;
+      recommended = 'email' as const;
+      reason = 'Email is recommended here because win-back notifications are longer and allow rich story and discount context without feeling intrusive.';
+    } else if (g.includes('offer') || g.includes('discount') || g.includes('sale')) {
+      whatsapp = `ALERT! \ud83d\udd25 FLASH SALE! Get flat \u20b9500 cashback on all craft roasts today! Code: BREWNOW. Claim before roasts sell out! xeno.coffee/deals`;
+      sms = `Flash Sale! Get flat \u20b9500 cashback on roasts with code BREWNOW. Offer expires tonight! xeno.coffee/deals`;
+      email = {
+        subject: `FLASH SALE: Flat \u20b9500 cashback on all beans today! \ud83d\udd25`,
+        body: `Hi {name},\n\nThis is a major D2C flash roastery event!\n\nUse code BREWNOW today and receive a direct flat \u20b9500 cashback on your checkout total!\n\nNo minimum spent required. Shop here now.`
+      };
+      rcs = `FLASH SALE! \ud83d\udd25 Get flat \u20b9500 cashback on roasts with code BREWNOW!`;
+      recommended = 'whatsapp' as const;
+      reason = 'Flash sales perform exceptionally well over WhatsApp where instant notifications drive rapid 2-hour checkouts.';
+    }
+
+    return {
+      whatsapp,
+      sms,
+      email,
+      rcs,
+      recommended_channel: recommended,
+      recommendation_reason: reason
+    };
+  }
 }
 
 // -------------------------------------------------------------
@@ -1161,15 +1237,20 @@ export async function fetchRecentActivity(): Promise<RecentActivityItem[]> {
 // 13. FETCH AI INSIGHTS
 // -------------------------------------------------------------
 export async function fetchAIInsights(customers?: Customer[], campaigns?: Campaign[]): Promise<AIInsightItem[]> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
   try {
     const res = await fetch(`${API_BASE}/analytics/insights`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customers, campaigns })
+      body: JSON.stringify({ customers, campaigns }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (!res.ok) throw new Error('Failed to fetch AI insights from engine');
     return res.json();
   } catch (err) {
+    clearTimeout(timeoutId);
     console.warn('AI Insights retrieval failed, reverting to heuristic payload', err);
     // Dynamic absolute client-side fallback
     return [
@@ -1231,15 +1312,20 @@ export async function predictCampaign(params: {
   message: string;
   audiencePrompt: string;
 }): Promise<CampaignPrediction> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
   try {
     const res = await fetch(`${API_BASE}/campaigns/predict`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params)
+      body: JSON.stringify(params),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (!res.ok) throw new Error('Failed to generate predictive metrics');
     return res.json();
   } catch (err) {
+    clearTimeout(timeoutId);
     console.warn('Prediction engine failed, calculating client heuristic predictions', err);
     // Symmetrical client-side backup predictions
     const count = params.matchedCount || 5;
@@ -1280,3 +1366,178 @@ export async function predictCampaign(params: {
     };
   }
 }
+
+// -------------------------------------------------------------
+// 15. CUSTOMER CRUD ACTIONS
+// -------------------------------------------------------------
+export async function createCustomer(customerData: Partial<Customer>): Promise<Customer> {
+  const cId = customerData.id || `c_${Date.now()}`;
+  const newCustomer: Customer = {
+    id: cId,
+    name: customerData.name || 'Unnamed Customer',
+    email: customerData.email || '',
+    phone: customerData.phone || '',
+    memberSince: customerData.memberSince || new Date().toISOString().split('T')[0],
+    totalSpent: Number(customerData.totalSpent || 0),
+    orderCount: Number(customerData.orderCount || 0),
+    lastOrderDate: customerData.lastOrderDate || new Date().toISOString().split('T')[0],
+    tags: customerData.tags || ['new'],
+  };
+
+  if (isDemoMode()) {
+    initLocalDemoStorage();
+    const localCustomers: Customer[] = JSON.parse(localStorage.getItem('xeno_demo_customers') || '[]');
+    localCustomers.push(newCustomer);
+    localStorage.setItem('xeno_demo_customers', JSON.stringify(localCustomers));
+    return {
+      ...newCustomer,
+      ...calculateCustomerHealth(newCustomer)
+    };
+  }
+
+  const uid = getUid();
+  if (uid) {
+    try {
+      const custRef = doc(db, 'users', uid, 'customers', cId);
+      await setDoc(custRef, {
+        id: newCustomer.id,
+        name: newCustomer.name,
+        email: newCustomer.email,
+        phone: newCustomer.phone,
+        memberSince: newCustomer.memberSince,
+        totalSpent: newCustomer.totalSpent,
+        orderCount: newCustomer.orderCount,
+        lastOrderDate: newCustomer.lastOrderDate,
+        tags: newCustomer.tags
+      });
+      return {
+        ...newCustomer,
+        ...calculateCustomerHealth(newCustomer)
+      };
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `users/${uid}/customers/${cId}`);
+    }
+  }
+
+  // Server Fallback
+  const res = await fetch(`${API_BASE}/customers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newCustomer)
+  });
+  if (!res.ok) throw new Error('Failed to create customer');
+  const saved: Customer = await res.json();
+  return {
+    ...saved,
+    ...calculateCustomerHealth(saved)
+  };
+}
+
+export async function updateCustomer(id: string, customerData: Partial<Customer>): Promise<Customer> {
+  if (isDemoMode()) {
+    initLocalDemoStorage();
+    const localCustomers: Customer[] = JSON.parse(localStorage.getItem('xeno_demo_customers') || '[]');
+    const targetIdx = localCustomers.findIndex(c => c.id === id);
+    if (targetIdx === -1) throw new Error('Customer not found');
+    const existing = localCustomers[targetIdx];
+    const updated: Customer = {
+      ...existing,
+      name: customerData.name !== undefined ? customerData.name : existing.name,
+      email: customerData.email !== undefined ? customerData.email : existing.email,
+      phone: customerData.phone !== undefined ? customerData.phone : existing.phone,
+      memberSince: customerData.memberSince !== undefined ? customerData.memberSince : existing.memberSince,
+      totalSpent: customerData.totalSpent !== undefined ? Number(customerData.totalSpent) : existing.totalSpent,
+      orderCount: customerData.orderCount !== undefined ? Number(customerData.orderCount) : existing.orderCount,
+      lastOrderDate: customerData.lastOrderDate !== undefined ? customerData.lastOrderDate : existing.lastOrderDate,
+      tags: customerData.tags !== undefined ? customerData.tags : existing.tags,
+    };
+    localCustomers[targetIdx] = updated;
+    localStorage.setItem('xeno_demo_customers', JSON.stringify(localCustomers));
+    return {
+      ...updated,
+      ...calculateCustomerHealth(updated)
+    };
+  }
+
+  const uid = getUid();
+  if (uid) {
+    try {
+      const custDocRef = doc(db, 'users', uid, 'customers', id);
+      const custSnap = await getDoc(custDocRef);
+      if (!custSnap.exists()) throw new Error('Customer does not exist');
+      const existing = custSnap.data() as Customer;
+
+      const updatedRaw: Customer = {
+        ...existing,
+        name: customerData.name !== undefined ? customerData.name : existing.name,
+        email: customerData.email !== undefined ? customerData.email : existing.email,
+        phone: customerData.phone !== undefined ? customerData.phone : existing.phone,
+        memberSince: customerData.memberSince !== undefined ? customerData.memberSince : existing.memberSince,
+        totalSpent: customerData.totalSpent !== undefined ? Number(customerData.totalSpent) : existing.totalSpent,
+        orderCount: customerData.orderCount !== undefined ? Number(customerData.orderCount) : existing.orderCount,
+        lastOrderDate: customerData.lastOrderDate !== undefined ? customerData.lastOrderDate : existing.lastOrderDate,
+        tags: customerData.tags !== undefined ? customerData.tags : existing.tags,
+      };
+
+      await setDoc(custDocRef, {
+        id: updatedRaw.id,
+        name: updatedRaw.name,
+        email: updatedRaw.email,
+        phone: updatedRaw.phone,
+        memberSince: updatedRaw.memberSince,
+        totalSpent: updatedRaw.totalSpent,
+        orderCount: updatedRaw.orderCount,
+        lastOrderDate: updatedRaw.lastOrderDate,
+        tags: updatedRaw.tags
+      });
+
+      return {
+        ...updatedRaw,
+        ...calculateCustomerHealth(updatedRaw)
+      };
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}/customers/${id}`);
+    }
+  }
+
+  // Server Fallback
+  const res = await fetch(`${API_BASE}/customers/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customerData)
+  });
+  if (!res.ok) throw new Error('Failed to update customer');
+  const saved: Customer = await res.json();
+  return {
+    ...saved,
+    ...calculateCustomerHealth(saved)
+  };
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  if (isDemoMode()) {
+    initLocalDemoStorage();
+    const localCustomers: Customer[] = JSON.parse(localStorage.getItem('xeno_demo_customers') || '[]');
+    const filtered = localCustomers.filter(c => c.id !== id);
+    localStorage.setItem('xeno_demo_customers', JSON.stringify(filtered));
+    return;
+  }
+
+  const uid = getUid();
+  if (uid) {
+    try {
+      const custRef = doc(db, 'users', uid, 'customers', id);
+      await deleteDoc(custRef);
+      return;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `users/${uid}/customers/${id}`);
+    }
+  }
+
+  // Server Fallback
+  const res = await fetch(`${API_BASE}/customers/${id}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Failed to delete customer');
+}
+

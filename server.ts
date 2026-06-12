@@ -80,6 +80,13 @@ async function generateContentWithRetry(params: {
         const errMsg = typeof e === 'object' ? JSON.stringify(e) : (e?.message || e?.status || String(e));
         console.warn(`[Gemini API] Model ${modelName} (attempt ${attempt}/3) failed: ${errMsg}`);
         
+        // Detect if error is an API key error, 400 or 403 request error. Fast-fail since retries won't help!
+        const isAuthError = errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID') || errMsg.includes('403') || errMsg.includes('400') || e?.status === 400 || e?.status === 403 || e?.code === 400 || e?.code === 403;
+        if (isAuthError) {
+          console.warn('[Gemini API] Request error or invalid API key. Fast-failing cascade.');
+          throw e; // Fast fail immediately to let robust fallbacks run
+        }
+
         // Detect if the server is busy / experiencing high demand (503 / UNAVAILABLE)
         const isServerBusy = errMsg.includes('503') || 
                              errMsg.includes('UNAVAILABLE') || 

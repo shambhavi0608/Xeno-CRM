@@ -14,9 +14,12 @@ import {
   Upload,
   X,
   RefreshCw,
-  Download
+  Download,
+  Plus,
+  Edit,
+  Trash2
 } from 'lucide-react';
-import { fetchCustomers, fetchCustomerDetails, ingestCustomerData } from '../lib/api.js';
+import { fetchCustomers, fetchCustomerDetails, ingestCustomerData, createCustomer, updateCustomer, deleteCustomer } from '../lib/api.js';
 import { Customer, Order } from '../types/index.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Drawer } from '../components/ui/Drawer.js';
@@ -58,6 +61,114 @@ export default function CustomersPage() {
   const [activeCustomer, setActiveCustomer] = useState<Customer | null>(null);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
   const [isDrawerLoading, setIsDrawerLoading] = useState(false);
+
+  // Form Drawer/Modal state (for Create & Edit)
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formType, setFormType] = useState<'create' | 'edit'>('create');
+  const [formErrorStr, setFormErrorStr] = useState<string | null>(null);
+  const [isFormSaving, setIsFormSaving] = useState(false);
+  const [formFields, setFormFields] = useState({
+    id: '',
+    name: '',
+    email: '',
+    phone: '',
+    tags: '',
+    totalSpent: 0,
+    orderCount: 0,
+    lastOrderDate: '',
+    memberSince: ''
+  });
+
+  const handleAddCustomerClick = () => {
+    setFormType('create');
+    setFormFields({
+      id: `c_${Date.now()}`,
+      name: '',
+      email: '',
+      phone: '',
+      tags: 'new',
+      totalSpent: 0,
+      orderCount: 0,
+      lastOrderDate: new Date().toISOString().split('T')[0],
+      memberSince: new Date().toISOString().split('T')[0]
+    });
+    setFormErrorStr(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditCustomerClick = (cust: Customer) => {
+    setFormType('edit');
+    setFormFields({
+      id: cust.id,
+      name: cust.name,
+      email: cust.email,
+      phone: cust.phone,
+      tags: cust.tags.join(', '),
+      totalSpent: cust.totalSpent,
+      orderCount: cust.orderCount,
+      lastOrderDate: cust.lastOrderDate,
+      memberSince: cust.memberSince
+    });
+    setFormErrorStr(null);
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsFormSaving(true);
+      setFormErrorStr(null);
+
+      if (!formFields.name.trim()) throw new Error('Name is required');
+      if (!formFields.email.trim()) throw new Error('Email is required');
+
+      const customerPayload: Partial<Customer> = {
+        id: formFields.id,
+        name: formFields.name.trim(),
+        email: formFields.email.trim(),
+        phone: formFields.phone.trim() || '+910000000000',
+        tags: formFields.tags.split(',').map(t => t.trim()).filter(Boolean),
+        totalSpent: Number(formFields.totalSpent) || 0,
+        orderCount: Number(formFields.orderCount) || 0,
+        lastOrderDate: formFields.lastOrderDate || new Date().toISOString().split('T')[0],
+        memberSince: formFields.memberSince || new Date().toISOString().split('T')[0]
+      };
+
+      if (formType === 'create') {
+        const created = await createCustomer(customerPayload);
+        success('Customer Added', `Customer ${created.name} successfully registered.`);
+      } else {
+        const updated = await updateCustomer(formFields.id, customerPayload);
+        success('Customer Updated', `Customer ${updated.name} profile successfully updated.`);
+        if (activeCustomer && activeCustomer.id === formFields.id) {
+          setActiveCustomer(updated);
+        }
+      }
+
+      setIsFormOpen(false);
+      loadCustomers();
+    } catch (err: any) {
+      setFormErrorStr(err.message || 'Error processing request');
+      error('Failed to save customer', err.message || '');
+    } finally {
+      setIsFormSaving(false);
+    }
+  };
+
+  const handleDeleteCustomerClick = async (customerId: string) => {
+    if (!window.confirm('Are you absolutely sure you want to delete this customer? All their cloud roster details will be purged.')) {
+      return;
+    }
+
+    try {
+      await deleteCustomer(customerId);
+      success('Customer Deleted', 'Roster file successfully removed.');
+      setIsDrawerOpen(false);
+      loadCustomers();
+    } catch (err: any) {
+      error('Deletion Failed', err.message || 'An error occurred.');
+    }
+  };
 
   // Ingest state management
   const [isIngestOpen, setIsIngestOpen] = useState(false);
@@ -267,6 +378,16 @@ export default function CustomersPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Add Customer Button */}
+          <button 
+            onClick={handleAddCustomerClick}
+            className="flex text-xs font-semibold py-2 px-4 rounded-lg bg-[#FF4500] hover:bg-[#FF4500]/90 text-white border border-[#FF4500]/25 shadow-lg shadow-[#FF4500]/10 transition-all cursor-pointer font-sans items-center gap-1.5 active:scale-95"
+            id="add_customer_btn"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Customer
+          </button>
+
           {/* Export Customers CSV Button */}
           <button 
             onClick={exportCustomersCSV}
@@ -280,10 +401,10 @@ export default function CustomersPage() {
           {/* Data Ingestion Utility Trigger */}
           <button 
             onClick={() => setIsIngestOpen(true)}
-            className="flex text-xs font-semibold py-2 px-4 rounded-lg bg-[#FF4500]/95 hover:bg-[#FF4500] text-white border border-[#FF4500]/25 shadow-lg shadow-[#FF4500]/10 transition-all cursor-pointer font-sans items-center gap-1.5 active:scale-95"
+            className="flex text-xs font-semibold py-2 px-4 rounded-lg border border-white/10 text-stone-300 hover:text-white hover:bg-white/5 backdrop-blur-md transition-all cursor-pointer font-sans items-center gap-1.5 active:scale-95"
           >
             <Database className="w-3.5 h-3.5" />
-            Ingest Data Suite
+            Ingest Data
           </button>
           
           {/* Diagnostic Ingestion Utility */}
@@ -441,150 +562,174 @@ export default function CustomersPage() {
         onClose={() => setIsDrawerOpen(false)}
         title="Shopper Comprehensive Summary"
         width="max-w-md"
+        noScroll={true}
       >
         {activeCustomer && (
-          <div className="p-6 space-y-6">
-            
-            {/* HERO SEGMENT */}
-            <div className="flex flex-col items-center text-center pb-6 border-b border-white/6">
-              <div className={`w-16 h-16 rounded-full border flex items-center justify-center font-bold text-xl mb-4 ${hashAvatarBg(activeCustomer.name)}`}>
-                {activeCustomer.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
-              </div>
-              <h3 className="text-base font-bold text-white tracking-tight font-sans">{activeCustomer.name}</h3>
-              <p className="text-xs text-stone-400 mt-1">{activeCustomer.email}</p>
+          <div className="flex flex-col h-full overflow-hidden text-left bg-[#111111]">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               
-              <div className="mt-3 flex gap-1 flex-wrap justify-center">
-                {activeCustomer.tags.map((tag, i) => (
-                  <Badge 
-                    key={tag} 
-                    variant={
-                      i === 0 ? 'brand' : 'muted'
-                    }
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            {/* AI PREDICTIVE METRICS & HEALTH SCORE */}
-            <div className="space-y-3" id="drawer_ai_health_score_section">
-              <h4 className="text-[10px] uppercase tracking-wider text-[#FF4500] font-bold font-mono flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> AI Health & Churn Risk
-              </h4>
-              <div className="bg-[#120a0a]/50 border border-[#FF4500]/20 rounded-xl p-4 space-y-4">
+              {/* HERO SEGMENT */}
+              <div className="flex flex-col items-center text-center pb-6 border-b border-white/6">
+                <div className={`w-16 h-16 rounded-full border flex items-center justify-center font-bold text-xl mb-4 ${hashAvatarBg(activeCustomer.name)}`}>
+                  {activeCustomer.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+                </div>
+                <h3 className="text-base font-bold text-white tracking-tight font-sans">{activeCustomer.name}</h3>
+                <p className="text-xs text-stone-400 mt-1">{activeCustomer.email}</p>
                 
-                {/* Visual health score progress bar */}
-                <div>
-                  <div className="flex justify-between items-center text-xs mb-1.5">
-                    <span className="text-stone-400 font-medium">Customer Health Score</span>
-                    <span className="text-[#FF4500] font-bold font-mono">{activeCustomer.healthScore || 0}/100</span>
-                  </div>
-                  <div className="w-full h-2 bg-stone-900 rounded-full overflow-hidden border border-white/5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500 rounded-full transition-all duration-500"
-                      style={{ width: `${activeCustomer.healthScore || 0}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Substats for Churn Risk and Engagement Score */}
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <span className="text-[9px] text-stone-500 font-mono block uppercase">Churn Risk Level</span>
-                    <span className={`text-xs font-bold font-mono mt-1 px-2 py-0.5 rounded border inline-block ${
-                      activeCustomer.churnRisk === 'High' 
-                        ? 'text-red-400 bg-red-400/10 border-red-400/25' 
-                        : activeCustomer.churnRisk === 'Medium'
-                          ? 'text-amber-400 bg-amber-400/10 border-amber-400/25'
-                          : 'text-green-400 bg-green-400/10 border-green-400/25'
-                    }`}>
-                      {activeCustomer.churnRisk || 'Low'} Risk
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[9px] text-stone-500 font-mono block uppercase">Engagement Score</span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-white text-sm font-bold font-mono">{activeCustomer.engagementScore || 0}%</span>
-                      <span className="text-[10px] text-stone-400">({
-                        (activeCustomer.engagementScore || 0) > 75 
-                          ? 'Excellent' 
-                          : (activeCustomer.engagementScore || 0) > 40
-                            ? 'Moderate'
-                            : 'Failing'
-                      })</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* OVERVIEW SUB-STAT CONTAINER */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] uppercase tracking-wider text-[#7a6f6f] font-bold font-mono">
-                Financial Footprint
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-black/40 border border-white/5 rounded-xl p-4">
-                  <span className="text-[10px] text-stone-500 font-mono block">Aggregate LTV</span>
-                  <span className="text-white text-lg font-bold mt-1.5 block font-sans">₹{activeCustomer.totalSpent.toLocaleString()}</span>
-                </div>
-                <div className="bg-black/40 border border-white/5 rounded-xl p-4">
-                  <span className="text-[10px] text-stone-500 font-mono block">Order Frequency</span>
-                  <span className="text-white text-lg font-bold mt-1.5 block font-sans">{activeCustomer.orderCount} purchase(s)</span>
-                </div>
-                <div className="bg-black/40 border border-white/5 rounded-xl p-4">
-                  <span className="text-[10px] text-stone-500 font-mono block">Last Order Interval</span>
-                  <span className={`text-sm font-bold mt-1.5 block font-mono ${getRelativeOrderColor(activeCustomer.lastOrderDate)}`}>
-                    {activeCustomer.lastOrderDate}
-                  </span>
-                </div>
-                <div className="bg-black/40 border border-white/5 rounded-xl p-4">
-                  <span className="text-[10px] text-stone-500 font-mono block">VIP Cohort JoinDate</span>
-                  <span className="text-white text-sm font-bold mt-1.5 block font-sans">{activeCustomer.memberSince}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* RECENT ORDERS SUITE */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] uppercase tracking-wider text-[#7a6f6f] font-bold font-mono">
-                Order Activity Log
-              </h4>
-
-              {isDrawerLoading ? (
-                <div className="space-y-2 animate-pulse">
-                  <div className="h-10 bg-stone-900 rounded-lg" />
-                  <div className="h-10 bg-stone-900 rounded-lg" />
-                </div>
-              ) : activeOrders.length === 0 ? (
-                <p className="text-stone-500 text-xs italic">No orders logged.</p>
-              ) : (
-                <div className="space-y-2">
-                  {activeOrders.map((o) => (
-                    <div 
-                      key={o.orderId}
-                      className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center"
+                <div className="mt-3 flex gap-1 flex-wrap justify-center">
+                  {activeCustomer.tags.map((tag, i) => (
+                    <Badge 
+                      key={tag} 
+                      variant={
+                        i === 0 ? 'brand' : 'muted'
+                      }
                     >
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-mono text-stone-500 block">ID: {o.orderId}</span>
-                        <span className="text-stone-300 text-xs font-semibold mt-1 leading-normal truncate block font-sans">
-                          {o.items.join(', ')}
-                        </span>
-                        <span className="text-[10px] text-stone-500 block mt-1 font-mono">{o.timestamp}</span>
-                      </div>
-                      <div className="text-right shrink-0 ml-4">
-                        <span className="text-white text-sm font-bold block font-sans">₹{o.amount.toLocaleString()}</span>
-                        <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-green-500/10 text-green-500 border border-green-500/20 capitalize mt-1 inline-block">
-                          Completed
-                        </span>
-                      </div>
-                    </div>
+                      {tag}
+                    </Badge>
                   ))}
                 </div>
-              )}
+              </div>
+
+              {/* AI PREDICTIVE METRICS & HEALTH SCORE */}
+              <div className="space-y-3" id="drawer_ai_health_score_section">
+                <h4 className="text-[10px] uppercase tracking-wider text-[#FF4500] font-bold font-mono flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> AI Health & Churn Risk
+                </h4>
+                <div className="bg-[#120a0a]/50 border border-[#FF4500]/20 rounded-xl p-4 space-y-4">
+                  
+                  {/* Visual health score progress bar */}
+                  <div>
+                    <div className="flex justify-between items-center text-xs mb-1.5">
+                      <span className="text-stone-400 font-medium">Customer Health Score</span>
+                      <span className="text-[#FF4500] font-bold font-mono">{activeCustomer.healthScore || 0}/100</span>
+                    </div>
+                    <div className="w-full h-2 bg-stone-900 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500 rounded-full transition-all duration-500"
+                        style={{ width: `${activeCustomer.healthScore || 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Substats for Churn Risk and Engagement Score */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <span className="text-[9px] text-stone-500 font-mono block uppercase">Churn Risk Level</span>
+                      <span className={`text-xs font-bold font-mono mt-1 px-2 py-0.5 rounded border inline-block ${
+                        activeCustomer.churnRisk === 'High' 
+                          ? 'text-red-400 bg-red-400/10 border-red-400/25' 
+                          : activeCustomer.churnRisk === 'Medium'
+                            ? 'text-amber-400 bg-amber-400/10 border-amber-400/25'
+                            : 'text-green-400 bg-green-400/10 border-green-400/25'
+                      }`}>
+                        {activeCustomer.churnRisk || 'Low'} Risk
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[9px] text-stone-500 font-mono block uppercase">Engagement Score</span>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-white text-sm font-bold font-mono">{activeCustomer.engagementScore || 0}%</span>
+                        <span className="text-[10px] text-stone-400">({
+                          (activeCustomer.engagementScore || 0) > 75 
+                            ? 'Excellent' 
+                            : (activeCustomer.engagementScore || 0) > 40
+                              ? 'Moderate'
+                              : 'Failing'
+                        })</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* OVERVIEW SUB-STAT CONTAINER */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] uppercase tracking-wider text-[#7a6f6f] font-bold font-mono">
+                  Financial Footprint
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-black/40 border border-white/5 rounded-xl p-4">
+                    <span className="text-[10px] text-stone-500 font-mono block">Aggregate LTV</span>
+                    <span className="text-white text-lg font-bold mt-1.5 block font-sans">₹{activeCustomer.totalSpent.toLocaleString()}</span>
+                  </div>
+                  <div className="bg-black/40 border border-white/5 rounded-xl p-4">
+                    <span className="text-[10px] text-stone-500 font-mono block">Order Frequency</span>
+                    <span className="text-white text-lg font-bold mt-1.5 block font-sans">{activeCustomer.orderCount} purchase(s)</span>
+                  </div>
+                  <div className="bg-black/40 border border-white/5 rounded-xl p-4">
+                    <span className="text-[10px] text-stone-500 font-mono block">Last Order Interval</span>
+                    <span className={`text-sm font-bold mt-1.5 block font-mono ${getRelativeOrderColor(activeCustomer.lastOrderDate)}`}>
+                      {activeCustomer.lastOrderDate}
+                    </span>
+                  </div>
+                  <div className="bg-black/40 border border-white/5 rounded-xl p-4">
+                    <span className="text-[10px] text-stone-500 font-mono block">VIP Cohort JoinDate</span>
+                    <span className="text-white text-sm font-bold mt-1.5 block font-sans">{activeCustomer.memberSince}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* RECENT ORDERS SUITE */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] uppercase tracking-wider text-[#7a6f6f] font-bold font-mono">
+                  Order Activity Log
+                </h4>
+
+                {isDrawerLoading ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-10 bg-stone-900 rounded-lg" />
+                    <div className="h-10 bg-stone-900 rounded-lg" />
+                  </div>
+                ) : activeOrders.length === 0 ? (
+                  <p className="text-stone-500 text-xs italic text-left">No orders logged.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {activeOrders.map((o) => (
+                      <div 
+                        key={o.orderId}
+                        className="p-3 bg-black/40 border border-white/5 rounded-xl flex justify-between items-center"
+                      >
+                        <div className="min-w-0 text-left">
+                          <span className="text-[10px] font-mono text-stone-500 block">ID: {o.orderId}</span>
+                          <span className="text-stone-300 text-xs font-semibold mt-1 leading-normal truncate block font-sans">
+                            {o.items.join(', ')}
+                          </span>
+                          <span className="text-[10px] text-stone-500 block mt-1 font-mono">{o.timestamp}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-4">
+                          <span className="text-white text-sm font-bold block font-sans">₹{o.amount.toLocaleString()}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-semibold bg-green-500/10 text-green-500 border border-green-500/20 capitalize mt-1 inline-block">
+                            Completed
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* ACTION TRIGGERS (Sticky Footer) */}
+            <div className="p-4 border-t border-white/8 bg-[#161616] shrink-0 flex gap-3">
+              <button
+                onClick={() => handleEditCustomerClick(activeCustomer)}
+                className="flex-1 py-2 px-4 rounded-xl text-stone-200 hover:text-white bg-white/5 hover:bg-white/10 transition-all font-semibold font-sans text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-white/5 active:scale-95 transition-colors"
+                id="edit_customer_btn"
+              >
+                <Edit className="w-3.5 h-3.5 text-[#FF8C00]" />
+                Edit Profile
+              </button>
+              <button
+                onClick={() => handleDeleteCustomerClick(activeCustomer.id)}
+                className="py-2 px-4 rounded-xl text-[#EF4444] bg-[#EF4444]/5 hover:bg-[#EF4444]/15 border border-[#EF4444]/20 hover:border-[#EF4444]/35 transition-all font-semibold font-sans text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                id="delete_customer_btn"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Customer
+              </button>
             </div>
 
           </div>
@@ -756,6 +901,161 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* ADD / EDIT CUSTOMER DRAWER FORM */}
+      {/* ========================================================= */}
+      <Drawer
+        isOpen={isFormOpen}
+        onClose={() => setIsFormOpen(false)}
+        title={formType === 'create' ? "Add New Shopper" : "Edit Shopper Profile"}
+        width="max-w-md"
+        noScroll={true}
+      >
+        <form onSubmit={handleFormSubmit} className="flex flex-col h-full overflow-hidden bg-[#111111]">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 text-left custom-scrollbar">
+            {/* Error alerts */}
+            {formErrorStr && (
+              <div className="p-3.5 rounded-xl bg-red-950/20 border border-red-500/20 text-xs text-red-400 font-mono text-left">
+                🚨 {formErrorStr}
+              </div>
+            )}
+
+            {/* Field: Name */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                Full Name *
+              </label>
+              <input
+                type="text"
+                required
+                className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2.5 text-sm text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                placeholder="e.g. Reyansh Deshmukh"
+                value={formFields.name}
+                onChange={(e) => setFormFields({ ...formFields, name: e.target.value })}
+              />
+            </div>
+
+            {/* Field: Email */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                required
+                className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2.5 text-sm text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                placeholder="e.g. r.deshmukh@nestcafe.in"
+                value={formFields.email}
+                onChange={(e) => setFormFields({ ...formFields, email: e.target.value })}
+              />
+            </div>
+
+            {/* Field: Phone */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                Telephone Contact
+              </label>
+              <input
+                type="text"
+                className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2.5 text-sm text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                placeholder="e.g. +919811223344"
+                value={formFields.phone}
+                onChange={(e) => setFormFields({ ...formFields, phone: e.target.value })}
+              />
+            </div>
+
+            {/* Field: Tags */}
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                Segment Tags (comma separated)
+              </label>
+              <input
+                type="text"
+                className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2.5 text-sm text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                placeholder="e.g. VIP, espresso-connoisseur, new"
+                value={formFields.tags}
+                onChange={(e) => setFormFields({ ...formFields, tags: e.target.value })}
+              />
+            </div>
+
+            {/* Sub-fields for advanced settings */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                  Total Spent (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2 text-xs text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                  placeholder="0"
+                  value={formFields.totalSpent}
+                  onChange={(e) => setFormFields({ ...formFields, totalSpent: Number(e.target.value) })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                  Order Count
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2 text-xs text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                  placeholder="0"
+                  value={formFields.orderCount}
+                  onChange={(e) => setFormFields({ ...formFields, orderCount: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                  Last Order Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2 text-xs text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                  value={formFields.lastOrderDate}
+                  onChange={(e) => setFormFields({ ...formFields, lastOrderDate: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-stone-400 block font-mono">
+                  Member Since
+                </label>
+                <input
+                  type="date"
+                  className="w-full bg-[#18181A] border border-white/8 rounded-xl px-4 py-2 text-xs text-white placeholder-stone-600 focus:border-[#FF4500]/50 focus:ring-1 focus:ring-[#FF4500]/20 focus:outline-none transition-all font-sans"
+                  value={formFields.memberSince}
+                  onChange={(e) => setFormFields({ ...formFields, memberSince: e.target.value })}
+                />
+              </div>
+            </div>
+
+          </div>
+
+          <div className="p-4 border-t border-white/8 bg-[#161616] shrink-0 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsFormOpen(false)}
+              className="px-4 py-2 rounded-xl text-stone-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all font-semibold font-sans text-xs cursor-pointer border border-white/5 animate-fade-in"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isFormSaving}
+              className="px-5 py-2 rounded-xl bg-[#FF4500] hover:bg-[#FF8C00] disabled:bg-[#FF4500]/50 text-white font-bold font-sans text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-[#FF4500]/20 active:scale-98 transition-all"
+            >
+              {isFormSaving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </div>
+        </form>
+      </Drawer>
 
     </div>
   );
