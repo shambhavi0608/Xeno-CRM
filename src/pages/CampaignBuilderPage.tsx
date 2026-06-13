@@ -305,7 +305,7 @@ export default function CampaignBuilderPage() {
                   <PlusCircle className="w-5 h-5 text-[#FF4500]" /> Define Target Audience Cohorts
                 </h3>
                 <p className="text-stone-400 text-xs mt-1 leading-normal">
-                  Xeno utilizes a smart Hybrid NLP evaluation. Simply write down who you are targeting in natural English and we will filter customer records automatically.
+                  Mochi utilizes a smart Hybrid NLP evaluation. Simply write down who you are targeting in natural English and we will filter customer records automatically.
                 </p>
               </div>
 

@@ -153,15 +153,15 @@ export default function LandingPage() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-85 active:scale-98 transition-all select-none group"
           title="Return to Welcome Page"
         >
-          {/* Xeno CRM Overlapping Geometric Logo */}
+          {/* Mochi CRM Overlapping Geometric Logo */}
           <div className="relative w-6 h-6 flex items-center justify-center mr-1">
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD700] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF5A1F] -translate-x-[2px] translate-y-[4px] opacity-80 transform rotate-45 transition-transform group-hover:-rotate-12" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF69B4] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD1DC] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF8DA1] -translate-x-[2px] translate-y-[4px] opacity-80 transform rotate-45 transition-transform group-hover:-rotate-12" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF69B4] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
           </div>
           <span className="text-2xl font-bold tracking-tight text-white font-display">
-            Xeno <span className="text-[#FF4500]">CRM</span>
+            Mochi <span className="text-[#FF69B4]">CRM</span>
           </span>
         </div>
 
@@ -396,7 +396,7 @@ export default function LandingPage() {
           <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">CRM System Architecture</span>
           <h2 className="text-3xl font-extrabold tracking-tight font-display text-white">Full-Stack Decoupled Loop</h2>
           <p className="text-stone-400 text-xs font-light leading-normal">
-            The Xeno CRM platform incorporates highly functional client segments and real-time backend messaging adapters on port 3000.
+            The Mochi CRM platform incorporates highly functional client segments and real-time backend messaging adapters.
           </p>
         </div>
 
@@ -502,8 +502,8 @@ export default function LandingPage() {
 
         {/* Header information */}
         <div className="text-center space-y-3 max-w-xl mx-auto mb-12 relative z-10">
-          <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">Cross-Channel Xeno Engine</span>
-          <h2 className="text-3xl font-extrabold tracking-tight font-display text-white">Xeno Campaign Engine</h2>
+          <span className="text-xs uppercase text-[#FF4500] font-mono tracking-widest font-bold">Cross-Channel Mochi Engine</span>
+          <h2 className="text-3xl font-extrabold tracking-tight font-display text-white">Mochi Campaign Engine</h2>
           <p className="text-stone-400 text-xs font-light leading-normal">
             Interact with actual brand channels and check real-time payload templates synced dynamically within our marketing loop.
           </p>
@@ -541,8 +541,8 @@ export default function LandingPage() {
               {/* Simulated chat preview interface */}
               <div className="space-y-3 bg-stone-950/80 p-4 rounded-2xl border border-white/5 font-sans relative">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-white/4">
-                  <div className="h-5 w-5 rounded-full bg-gradient-to-tr from-stone-700 to-stone-800 flex items-center justify-center text-[8px] font-bold">X</div>
-                  <span className="text-[10px] font-bold text-stone-300">Xeno Coffee Roasters</span>
+                  <div className="h-5 w-5 rounded-full bg-gradient-to-tr from-stone-700 to-stone-800 flex items-center justify-center text-[8px] font-bold">M</div>
+                  <span className="text-[10px] font-bold text-stone-300">Mochi Brand Roasters</span>
                   <span className="h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
                 </div>
                 
@@ -725,11 +725,11 @@ export default function LandingPage() {
       {/* ========================================================= */}
       <footer className="relative z-10 bg-[#120a0a]/60 border-t border-white/6 py-12 px-6 md:px-12 text-center select-none text-stone-500 text-xs flex flex-col sm:flex-row items-center justify-between gap-4 max-w-7xl mx-auto rounded-t-3xl backdrop-blur-md">
         <div className="flex items-center gap-1.5 font-semibold text-stone-400">
-          <Coffee className="w-4 h-4 text-[#FF4500]" />
-          <span>Xeno Mini CRM Roastery Edition</span>
+          <Coffee className="w-4 h-4 text-[#FF69B4]" />
+          <span>Mochi Mini CRM Roastery Edition</span>
         </div>
         <p className="font-mono text-[10px] text-stone-600">
-          © 2026 Xeno CRM. All Rights Reserved. Active on Port 3000 Ingress Node
+          © 2026 Mochi CRM. All Rights Reserved.
         </p>
         <button 
           onClick={() => navigate('/dashboard')}

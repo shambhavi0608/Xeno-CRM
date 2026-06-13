@@ -101,15 +101,15 @@ export default function AuthPage() {
           className="flex items-center gap-2 cursor-pointer hover:opacity-85 active:scale-98 transition-all select-none group"
           title="Return to Welcome Page"
         >
-          {/* Xeno CRM Overlapping Geometric Logo */}
+          {/* Mochi CRM Overlapping Geometric Logo */}
           <div className="relative w-6 h-6 flex items-center justify-center mr-1">
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD700] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF5A1F] -translate-x-[2px] translate-y-[4px] opacity-80 transform rotate-45 transition-transform group-hover:-rotate-12" />
-            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF4500] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF69B4] -translate-x-[4px] -translate-y-[4px] opacity-90 transform rotate-12 transition-transform group-hover:rotate-45" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FFD1DC] translate-x-[4px] -translate-y-[2px] opacity-85 transform -rotate-12 mix-blend-screen transition-transform group-hover:rotate-12" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF8DA1] -translate-x-[2px] translate-y-[4px] opacity-80 transform rotate-45 transition-transform group-hover:-rotate-12" />
+            <div className="absolute w-3.5 h-3.5 rounded bg-[#FF69B4] translate-x-[4px] translate-y-[4px] opacity-90 transform -rotate-45 transition-transform group-hover:rotate-90" />
           </div>
           <span className="text-2xl font-bold tracking-tight text-white font-display flex items-center">
-            Xeno <span className="text-[#FF4500]">CRM</span>
+            Mochi <span className="text-[#FF69B4]">CRM</span>
           </span>
         </div>
 
@@ -130,8 +130,8 @@ export default function AuthPage() {
             onClick={() => navigate('/')}
             className="flex items-center gap-2 cursor-pointer hover:opacity-85 active:scale-95 transition-all text-2xl font-bold font-display"
           >
-            <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-[#FF4500] to-[#FFD700]"></div>
-            Xeno<span className="text-[#FF4500]">CRM</span>
+            <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-[#FF69B4] to-[#FFD1DC]"></div>
+            Mochi<span className="text-[#FF69B4]">CRM</span>
           </div>
           <p className="text-[11px] font-semibold text-[#7a6f6f] uppercase tracking-widest mt-2 font-mono">
             Enterprise Client Workspace

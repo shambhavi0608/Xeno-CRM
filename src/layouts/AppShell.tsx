@@ -95,13 +95,13 @@ export default function AppShell({ children, title }: AppShellProps) {
             className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-all active:scale-98 select-none"
             title="Return to Welcome Page"
           >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#FF4500] to-[#FFD700]"></div>
+            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#FF69B4] to-[#FFD1DC]"></div>
             <span className="text-lg font-bold tracking-tight text-white flex items-center select-none font-display">
-              Xeno<span className="text-[#FF4500] font-extrabold ml-0.5">CRM</span>
+              Mochi<span className="text-[#FF69B4] font-extrabold ml-0.5">CRM</span>
             </span>
             <span className="relative flex h-2.5 w-2.5 ml-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF4500] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF4500]"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF69B4] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF69B4]"></span>
             </span>
           </div>
           <span className="text-[11px] font-medium text-[#7a6f6f] uppercase tracking-wider mt-1.5 font-mono">

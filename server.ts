@@ -434,7 +434,7 @@ app.post('/api/segment/suggest', async (req, res) => {
         tags: c.tags
       }));
 
-      const sysInstruction = `You are the AI brain behind Xeno CRM's Hybrid Segmentation Engine. Given a list of customers and the marketer's natural language goal description, you must identify which customer IDs match the criteria.
+      const sysInstruction = `You are the AI brain behind Mochi CRM's Hybrid Segmentation Engine. Given a list of customers and the marketer's natural language goal description, you must identify which customer IDs match the criteria.
 Format the output as a strict JSON object with:
 1. "explanation": A natural, professional description of who we are targeting and why (e.g. "Targeting customers with total spending over ₹5,000 who haven't ordered recently").
 2. "rules": An array of rule description strings representing the filters applied (e.g., ["totalSpent > ₹5,000", "days_since_last_order > 30"]).
@@ -661,7 +661,7 @@ app.post('/api/analytics/insights', async (req, res) => {
         .slice(0, 3)
         .map((c: any) => ({ name: c.name, totalSpent: c.totalSpent, lastOrderDate: c.lastOrderDate }));
 
-      const sysInstruction = `You are Xeno CRM's Chief Data Scientist AI. Analyze the uploaded customer base and marketing metrics. Generate exactly 5 valuable business insights matching the 5 requested categories:
+      const sysInstruction = `You are Mochi CRM's Chief Data Scientist AI. Analyze the uploaded customer base and marketing metrics. Generate exactly 5 valuable business insights matching the 5 requested categories:
 1. "churn" (Churn risk customers): Isolate at-risk/inactive segments or valuable patrons about to lapse, mention their details and impact.
 2. "revenue" (Revenue opportunities): Spot VIP growth paths, upsell segments, or high-potential customer groups.
 3. "channel" (Best performing channel): Identify the absolute champion marketing channel (whatsapp, rcs, email, or sms) based on highest CTR or orders, with metrics.
@@ -795,7 +795,7 @@ app.post('/api/campaigns/predict', async (req, res) => {
   const ai = getAi();
   if (ai) {
     try {
-      const sysInstruction = `You are a D2C e-commerce forecasting neural network. Predict real-time engagement and financial outcomes for Xeno CRM. Given a count of targeted customers, the chosen communication channel, the message text, and the target cohort prompt, calculate:
+      const sysInstruction = `You are a D2C e-commerce forecasting neural network. Predict real-time engagement and financial outcomes for Mochi CRM. Given a count of targeted customers, the chosen communication channel, the message text, and the target cohort prompt, calculate:
 1. "predictedReach": Exact estimated count of successfully delivered messages (e.g. integer close to matchedCount).
 2. "openRate": Predicted open rate percentage (number between 0 and 100, e.g. 70-95% for WhatsApp/SMS/RCS, 20-30% for email).
 3. "conversionRate": Predicted checkout purchase conversion rate percentage (number between 0 and 100, typically 5-15% for instant messengers, 1.5-4% for email).
@@ -1143,7 +1143,7 @@ app.post(['/api/copilot/generate', '/api/v1/copilot/generate'], async (req, res)
 
   if (ai) {
     try {
-      const sysInstruction = `You are a professional marketing strategist for Xeno CRM. Integrate the user's textual prompt to design a targeted campaign.
+      const sysInstruction = `You are a professional marketing strategist for Mochi CRM. Integrate the user's textual prompt to design a targeted campaign.
 Return a strict JSON conforming to this schema:
 {
   "segment": {
@@ -1260,7 +1260,7 @@ Suggested top-performing channel from historical logs: ${optimized.recommendedCh
     rule = 'customer.orderCount <= 1';
     audienceType = 'First-Time Leads';
     channel = 'whatsapp';
-    message = 'Hey {name}! 🎉 Thanks for choosing Xeno! Here is a special 10% welcome coupon for your second order: WELCOME10. Shop: xeno.coffee/welcome';
+    message = 'Hey {name}! 🎉 Thanks for choosing Mochi! Here is a special 10% welcome coupon for your second order: WELCOME10. Shop: mochi.coffee/welcome';
     openRate = 95;
     clickRate = 18;
     explainability = [
@@ -1332,7 +1332,7 @@ app.get(['/api/insights/daily', '/api/v1/insights/daily'], async (req, res) => {
   const ai = getAi();
   if (ai) {
     try {
-      const sysInstruction = `You are Xeno-CRM's executive Marketing Analytics Advisor. Given daily metrics on churn, VIPs, and risk:
+      const sysInstruction = `You are Mochi CRM's executive Marketing Analytics Advisor. Given daily metrics on churn, VIPs, and risk:
 ${JSON.stringify(statsPayload)}
 
 Generate exactly 3 high-impact marketing actions formatted as JSON.
