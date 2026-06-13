@@ -1,4 +1,4 @@
-# 🚀 Xeno CRM || AI-Powered Customer Relationship & Campaign Management Platform
+# Mochi CRM || AI-Powered Customer Relationship & Campaign Management Platform
 
 > **Internship Assignment | Xeno**  
 > Built with React 19, TypeScript, Express, Firebase, Google Gemini AI, and Vite
