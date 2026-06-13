@@ -4,7 +4,6 @@
 > Built with React 19, TypeScript, Express, Firebase, Google Gemini AI, and Vite
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=for-the-badge&logo=vercel)](https://xeno-crm-bice.vercel.app)
-[![AI Studio](https://img.shields.io/badge/Google%20AI%20Studio-App-blue?style=for-the-badge&logo=google)](https://ai.studio/apps/a5f94a47-52dc-4953-b766-54e57880e643)
 [![TypeScript](https://img.shields.io/badge/TypeScript-98.8%25-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 
 ---
@@ -29,7 +28,7 @@
 
 ## 📖 Project Overview
 
-**Xeno CRM** is a full-stack, AI-augmented Customer Relationship Management and marketing automation platform built as part of the Xeno internship assignment. It enables marketing teams to:
+**Mochi CRM** is a full-stack, AI-augmented Customer Relationship Management and marketing automation platform built as part of the Xeno internship assignment. It enables marketing teams to:
 
 - **Manage and segment customers** using both rule-based filters and natural language AI prompts.
 - **Create and launch multi-channel campaigns** targeting WhatsApp, SMS, Email, and RCS.
