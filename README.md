@@ -313,9 +313,6 @@ APP_URL="http://localhost:3000"
 The project is deployed on **Vercel** and can be viewed at:  
 👉 **https://xeno-crm-bice.vercel.app**
 
-It is also hosted on **Google AI Studio** at:  
-👉 https://ai.studio/apps/a5f94a47-52dc-4953-b766-54e57880e643
-
 ### Deploying to Vercel
 
 ```bash
@@ -376,7 +373,7 @@ Given more time, the following enhancements would meaningfully elevate the platf
 ## 👩‍💻 Author
 
 **Shambhavi**  
-Internship Candidate — Xeno  
+Internship Candidate for :- Xeno  
 GitHub: [@shambhavi0608](https://github.com/shambhavi0608)
 
 ---
