@@ -5,7 +5,7 @@ import {
   Megaphone, 
   Users, 
   Plus, 
-  Play, 
+  PlayCircle, 
   Search, 
   Bell, 
   RefreshCw,
@@ -226,14 +226,14 @@ export default function AppShell({ children, title }: AppShellProps) {
             <button
               onClick={handleRunDemo}
               disabled={isRunningDemo}
-              className="flex items-center gap-2 py-1.5 px-3 rounded-lg text-xs font-semibold bg-[#FF4500] hover:bg-[#FF8C00] disabled:opacity-50 transition-all select-none shadow hover:shadow-lg active:scale-97 cursor-pointer"
+              className="run-demo-button flex items-center gap-2.5 py-[10px] px-[20px] rounded-xl text-[14px] font-bold bg-gradient-to-r from-[#FF4500] via-[#FF5A1F] to-[#FF7000] hover:from-[#FF5A1F] hover:to-[#FF8C00] text-white disabled:opacity-50 transition-all select-none shadow-lg shadow-orange-600/25 hover:shadow-orange-500/40 active:scale-97 cursor-pointer hover:scale-[1.02] border border-orange-400/20 tracking-wide"
             >
               {isRunningDemo ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <RefreshCw className="w-[18px] h-[18px] animate-spin" />
               ) : (
-                <Play className="w-3.5 h-3.5 fill-current" />
+                <PlayCircle className="w-[18px] h-[18px] text-white" />
               )}
-              {isRunningDemo ? 'Running Demo...' : '▶ Run Demo'}
+              <span>{isRunningDemo ? 'Running...' : 'Execute Campaign'}</span>
             </button>
           </div>
         </header>

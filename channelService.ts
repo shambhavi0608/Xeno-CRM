@@ -47,11 +47,11 @@ app.post('/channel/send', (req, res) => {
     const outcomeRoll = Math.random();
 
     setTimeout(() => {
-      if (outcomeRoll < 0.10) {
-        // 10% failed
+      if (outcomeRoll < 0.04) {
+        // 4% failed (Realistic 96% delivery rate between 92% and 99%)
         postStatus(campaignId, cust.id, 'failed');
       } else {
-        // 90% delivered
+        // 96% delivered
         postStatus(campaignId, cust.id, 'delivered');
 
         // 3. Open Evaluation (~3500ms to 6000ms)

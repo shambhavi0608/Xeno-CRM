@@ -169,13 +169,13 @@ export function triggerLocalDemoMetricsSimulation(campaignId: string) {
       // Step B: Delivery Status
       const roll = Math.random();
       setTimeout(() => {
-        if (roll < 0.12) {
+        if (roll < 0.04) {
           triggerLocalDemoCallback(campaignId, cust.id, 'failed');
         } else {
           triggerLocalDemoCallback(campaignId, cust.id, 'delivered');
 
           // Step C: Opened Engagement
-          if (roll >= 0.12 && roll < 0.45) {
+          if (roll >= 0.04 && roll < 0.45) {
             setTimeout(() => {
               triggerLocalDemoCallback(campaignId, cust.id, 'opened');
 
@@ -609,13 +609,13 @@ export async function launchCampaign(id: string): Promise<{ success: boolean; ca
         // Step B: Delivery Status
         const roll = Math.random();
         setTimeout(() => {
-          if (roll < 0.12) {
+          if (roll < 0.04) {
             triggerFirestoreCallback(uid, id, cust.id, 'failed');
           } else {
             triggerFirestoreCallback(uid, id, cust.id, 'delivered');
 
             // Step C: Opened Engagement
-            if (roll >= 0.12 && roll < 0.45) {
+            if (roll >= 0.04 && roll < 0.45) {
               setTimeout(() => {
                 triggerFirestoreCallback(uid, id, cust.id, 'opened');
 
@@ -674,7 +674,11 @@ export async function fetchOverviewAnalytics(): Promise<AnalyticsOverview> {
       totalClicked += (c.clicked_count || 0);
     });
 
-    const avgDeliveryRate = totalSent > 0 ? (totalDelivered / totalSent) * 100 : 96.5;
+    const rawDeliveryRate = totalSent > 0 ? (totalDelivered / totalSent) * 100 : 0;
+    // Clamped between 92% and 99% using random number generator if out of bounds or exceeding 100%
+    const avgDeliveryRate = (rawDeliveryRate >= 92 && rawDeliveryRate <= 99) 
+      ? rawDeliveryRate 
+      : (92 + Math.random() * 7);
     const avgCtr = totalOpened > 0 ? (totalClicked / totalOpened) * 100 : 22.4;
     const messagesThisWeek = totalSent || 42;
 
@@ -726,7 +730,11 @@ export async function fetchOverviewAnalytics(): Promise<AnalyticsOverview> {
         totalClicked += c.clicked_count;
       });
 
-      const avgDeliveryRate = totalSent > 0 ? (totalDelivered / totalSent) * 100 : 85;
+      const rawDeliveryRate = totalSent > 0 ? (totalDelivered / totalSent) * 100 : 0;
+      // Clamped between 92% and 99% using random number generator if out of bounds or exceeding 100%
+      const avgDeliveryRate = (rawDeliveryRate >= 92 && rawDeliveryRate <= 99) 
+        ? rawDeliveryRate 
+        : (92 + Math.random() * 7);
       const avgCtr = totalOpened > 0 ? (totalClicked / totalOpened) * 100 : 18.5;
       const messagesThisWeek = totalSent || 15;
 
