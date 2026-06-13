@@ -20,11 +20,12 @@ import {
   Trash2
 } from 'lucide-react';
 import { fetchCustomers, fetchCustomerDetails, ingestCustomerData, createCustomer, updateCustomer, deleteCustomer } from '../lib/api.js';
-import { Customer, Order } from '../types/index.js';
+import { Customer, Order, calculateCustomerHealth } from '../types/index.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Drawer } from '../components/ui/Drawer.js';
 import { SkeletonCard } from '../components/ui/SkeletonCard.js';
 import { useToast } from '../components/ui/Toast.js';
+import HealthBadge from '../components/HealthBadge.js';
 
 const TABS = [
   { label: 'All', value: 'all' },
@@ -506,7 +507,12 @@ export default function CustomersPage() {
                       <h3 className="text-xs sm:text-sm font-semibold text-stone-100 group-hover:text-[#FF8C00] transition-colors truncate font-sans">
                         {c.name}
                       </h3>
-                      <p className="text-[11px] text-stone-550 truncate mt-0.5">{c.email}</p>
+                      <p className="text-[11px] text-[#A09595] truncate mt-0.5">{c.email}</p>
+                      
+                      {/* Customer Health Score (Feature 5) */}
+                      <div className="mt-2">
+                        <HealthBadge score={calculateCustomerHealth(c).healthScore} />
+                      </div>
                     </div>
 
                     <div className="shrink-0 h-fit">
@@ -604,12 +610,12 @@ export default function CustomersPage() {
                   <div>
                     <div className="flex justify-between items-center text-xs mb-1.5">
                       <span className="text-stone-400 font-medium">Customer Health Score</span>
-                      <span className="text-[#FF4500] font-bold font-mono">{activeCustomer.healthScore || 0}/100</span>
+                      <span className="text-[#FF4500] font-bold font-mono">{calculateCustomerHealth(activeCustomer).healthScore}/100</span>
                     </div>
                     <div className="w-full h-2 bg-stone-900 rounded-full overflow-hidden border border-white/5">
                       <div 
                         className="h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500 rounded-full transition-all duration-500"
-                        style={{ width: `${activeCustomer.healthScore || 0}%` }}
+                        style={{ width: `${calculateCustomerHealth(activeCustomer).healthScore}%` }}
                       />
                     </div>
                   </div>

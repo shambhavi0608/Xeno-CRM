@@ -1242,6 +1242,34 @@ export async function fetchRecentActivity(): Promise<RecentActivityItem[]> {
 // -------------------------------------------------------------
 // 13. FETCH AI INSIGHTS
 // -------------------------------------------------------------
+export interface DailyInsightsResponse {
+  counts: {
+    churnRiskCount: number;
+    vipCount: number;
+    inactive90Count: number;
+    revenueAtRisk: number;
+  };
+  insights: {
+    title: string;
+    description: string;
+    impact: string;
+    actionLabel: string;
+    campaignPayload: {
+      name: string;
+      audiencePrompt: string;
+      matchedCount: number;
+      message: string;
+      channel: 'whatsapp' | 'email' | 'sms' | 'rcs';
+    };
+  }[];
+}
+
+export async function fetchDailyInsights(): Promise<DailyInsightsResponse> {
+  const res = await fetch(`${API_BASE}/v1/insights/daily`);
+  if (!res.ok) throw new Error('Failed to fetch daily business insights');
+  return res.json();
+}
+
 export async function fetchAIInsights(customers?: Customer[], campaigns?: Campaign[]): Promise<AIInsightItem[]> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 6000);

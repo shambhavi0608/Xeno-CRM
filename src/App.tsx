@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage.js';
 import CampaignsPage from './pages/CampaignsPage.js';
 import CustomersPage from './pages/CustomersPage.js';
 import CampaignBuilderPage from './pages/CampaignBuilderPage.js';
+import AICopilot from './pages/AICopilot.js';
 import AuthPage from './pages/AuthPage.js';
 
 // Auto-Scroller helper that triggers on route transformations
@@ -61,6 +62,17 @@ export default function App() {
                 <ProtectedRoute>
                   <AppShell title="Dashboard">
                     <DashboardPage />
+                  </AppShell>
+                </ProtectedRoute>
+              } 
+            />
+
+            <Route 
+              path="/copilot" 
+              element={
+                <ProtectedRoute>
+                  <AppShell title="AI Copilot">
+                    <AICopilot />
                   </AppShell>
                 </ProtectedRoute>
               } 

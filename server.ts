@@ -16,6 +16,7 @@ import {
   writeCustomers
 } from './src/server/db.js';
 import { Customer, Order, Campaign, CommunicationEvent, AnalyticsOverview } from './src/types/index.js';
+import { optimizeChannel } from './src/server/channelOptimizer.js';
 
 const app = express();
 app.use(express.json());
@@ -1123,6 +1124,334 @@ app.post('/api/ingest', (req, res) => {
       totalCustomers: databaseCustomers.length,
       totalOrders: databaseOrders.length
     }
+  });
+});
+
+// FEATURE 1 & 3 & 4: COPOLIT GENERATION ENDPOINT
+app.post(['/api/copilot/generate', '/api/v1/copilot/generate'], async (req, res) => {
+  const { userPrompt } = req.body;
+  if (!userPrompt) {
+    return res.status(400).json({ message: 'userPrompt is required' });
+  }
+
+  const ai = getAi();
+  const customers = getCustomers();
+  const campaigns = getCampaigns();
+
+  // Run channel optimizer natively (Feature 4)
+  const optimized = optimizeChannel(campaigns);
+
+  if (ai) {
+    try {
+      const sysInstruction = `You are a professional marketing strategist for Xeno CRM. Integrate the user's textual prompt to design a targeted campaign.
+Return a strict JSON conforming to this schema:
+{
+  "segment": {
+    "rule": "Explanation of the rule filter applied, like 'totalSpent > 10000'",
+    "audienceType": "Descriptive target group title, e.g., 'At-Risk Premium Coffee Drinkers'"
+  },
+  "channel": "whatsapp" | "email" | "sms" | "rcs",
+  "message": "Enter high converting promotional message template body containing {name}",
+  "prediction": {
+    "openRate": number,
+    "clickRate": number
+  },
+  "explainabilitySteps": [
+    "A clean list of logical reasoning steps used to build this target segment, such as 'No orders recorded in past 60 days', 'Previous average cart spends exceeding ₹5,000'"
+  ]
+}
+
+Suggested top-performing channel from historical logs: ${optimized.recommendedChannel} (Open rate: ${optimized.openRate}%, CTR: ${optimized.ctr}%). Try to recommend this channel unless the user prompt demands otherwise.`;
+
+      const response = await generateContentWithRetry({
+        preferredModel: 'gemini-3.5-flash',
+        contents: `Marketer Prompt: "${userPrompt}"`,
+        config: {
+          systemInstruction: sysInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              segment: {
+                type: Type.OBJECT,
+                properties: {
+                  rule: { type: Type.STRING },
+                  audienceType: { type: Type.STRING }
+                },
+                required: ['rule', 'audienceType']
+              },
+              channel: { type: Type.STRING },
+              message: { type: Type.STRING },
+              prediction: {
+                type: Type.OBJECT,
+                properties: {
+                  openRate: { type: Type.NUMBER },
+                  clickRate: { type: Type.NUMBER }
+                },
+                required: ['openRate', 'clickRate']
+              },
+              explainabilitySteps: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              }
+            },
+            required: ['segment', 'channel', 'message', 'prediction', 'explainabilitySteps']
+          }
+        }
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      
+      // Calculate matched count dynamically from rules matching
+      // Filter some customers deterministically depending on rules or words
+      const r = (parsed.segment.rule || '').toLowerCase();
+      let matched = [...customers];
+      if (r.includes('60') || r.includes('inactive') || r.includes('days')) {
+        matched = customers.filter(c => c.tags.includes('inactive') || c.tags.includes('at-risk'));
+      } else if (r.includes('10000') || r.includes('vip') || r.includes('spent')) {
+        matched = customers.filter(c => c.totalSpent > 10000);
+      } else {
+        matched = customers.slice(0, 8);
+      }
+      if (matched.length === 0) matched = customers.slice(0, 5);
+
+      return res.json({
+        ...parsed,
+        matchedCount: matched.length,
+        explainabilitySteps: parsed.explainabilitySteps || [
+          "Identified through semantic cohort analysis matching the core user intent",
+          "Calculated historical spend indices mapping to targeted discounts",
+          "Optimized delivery medium matched to maximize Click-Through Rates"
+        ]
+      });
+
+    } catch (e) {
+      console.error('[Copilot Engine] LLM failed, fallback trigger:', e);
+    }
+  }
+
+  // Fallback trigger in case of API Key absence or rate limits
+  const p = userPrompt.toLowerCase();
+  let channel: 'whatsapp' | 'email' | 'sms' | 'rcs' = 'whatsapp';
+  let rule = 'customer.totalSpent > 10000';
+  let audienceType = 'VIP Coffee Lovers';
+  let message = 'Hey {name}! ☕ As one of our top patrons, here is an exclusive 15% off coupon: COFFEEVIP15. Validate yours here: xeno.coffee/vip';
+  let openRate = 92;
+  let clickRate = 14;
+  let explainability = [
+    "Historically spent over ₹10,000 at our brand outlets",
+    "Highest active engagement loops in recent quarters",
+    "Preference detected for premium single-origin roasts"
+  ];
+
+  if (p.includes('churn') || p.includes('inactive') || p.includes('60') || p.includes('90')) {
+    rule = 'diffDays > 60';
+    audienceType = 'At-Risk Lapsed Shoppers';
+    channel = 'email';
+    message = 'Hi {name}, we miss you! ☕ Here is flat 20% off your next order with code MISSYOU20. Let\'s brew together: xeno.coffee/comeback';
+    openRate = 26;
+    clickRate = 4.2;
+    explainability = [
+      "No checkout actions recorded in past 60 days",
+      "Prior average cart size exceeded ₹1,200",
+      "Email communication represents less intrusive retargeting"
+    ];
+  } else if (p.includes('new') || p.includes('fresh')) {
+    rule = 'customer.orderCount <= 1';
+    audienceType = 'First-Time Leads';
+    channel = 'whatsapp';
+    message = 'Hey {name}! 🎉 Thanks for choosing Xeno! Here is a special 10% welcome coupon for your second order: WELCOME10. Shop: xeno.coffee/welcome';
+    openRate = 95;
+    clickRate = 18;
+    explainability = [
+      "Registered member with 1 or fewer organic purchases",
+      "High immediate activation rate within first 14 days",
+      "Dynamic push via WhatsApp delivers highest conversion rate"
+    ];
+  }
+
+  const r = rule.toLowerCase();
+  let matched = [...customers];
+  if (r.includes('60') || r.includes('inactive')) {
+    matched = customers.filter(c => c.tags.includes('inactive') || c.tags.includes('at-risk'));
+  } else if (r.includes('10000') || r.includes('vip')) {
+    matched = customers.filter(c => c.totalSpent > 10000);
+  } else {
+    matched = customers.slice(0, 6);
+  }
+  if (matched.length === 0) matched = customers.slice(0, 5);
+
+  res.json({
+    segment: { rule, audienceType },
+    channel,
+    message,
+    prediction: { openRate, clickRate },
+    matchedCount: matched.length,
+    explainabilitySteps: explainability
+  });
+});
+
+// FEATURE 2: DAILY STRATEGIC INSIGHTS ENDPOINT
+app.get(['/api/insights/daily', '/api/v1/insights/daily'], async (req, res) => {
+  const customers = getCustomers();
+  const orders = getOrders();
+  const campaigns = getCampaigns();
+
+  // Dynamic Metrics Aggregators
+  const now = new Date('2026-06-12T07:16:58-07:00');
+  
+  // 1. Churn Risk (lastPurchase > 60 days)
+  const churnList = customers.filter(c => {
+    const lastDate = new Date(c.lastOrderDate);
+    const diffDays = Math.floor(Math.abs(now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 60;
+  });
+  
+  // 2. VIP Tiers (totalSpent > 10000)
+  const vipList = customers.filter(c => c.totalSpent > 10000);
+
+  // 3. Inactive volume (lastPurchase > 90 days)
+  const inactiveList = customers.filter(c => {
+    const lastDate = new Date(c.lastOrderDate);
+    const diffDays = Math.floor(Math.abs(now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > 90;
+  });
+
+  // Calculate Average Order Value (AOV)
+  const totalSpend = orders.reduce((acc, o) => acc + o.amount, 0);
+  const avgOrderValue = orders.length > 0 ? totalSpend / orders.length : 1250;
+  const revenueAtRisk = Math.round(avgOrderValue * inactiveList.length);
+
+  const statsPayload = {
+    churnRiskCount: churnList.length,
+    vipCount: vipList.length,
+    inactive90Count: inactiveList.length,
+    revenueAtRisk
+  };
+
+  const ai = getAi();
+  if (ai) {
+    try {
+      const sysInstruction = `You are Xeno-CRM's executive Marketing Analytics Advisor. Given daily metrics on churn, VIPs, and risk:
+${JSON.stringify(statsPayload)}
+
+Generate exactly 3 high-impact marketing actions formatted as JSON.
+The return structure must be a strict JSON object matching:
+{
+  "insights": [
+    {
+      "title": "Title of the alert card",
+      "description": "Short, highly descriptive and action-oriented summary tailored to the specific collection metrics",
+      "impact": "Highlight string (e.g. '₹84,500 at risk' or '48 at risk')",
+      "actionLabel": "Action button text like 'Launch Retention Campaign'",
+      "campaignPayload": {
+        "name": "Campaign title to auto-fill",
+        "audiencePrompt": "Prompt string to identify segment",
+        "matchedCount": number,
+        "message": "Promotional message targeting this cohort with {name}",
+        "channel": "whatsapp" | "email" | "sms" | "rcs"
+      }
+    }
+  ]
+}`;
+
+      const response = await generateContentWithRetry({
+        preferredModel: 'gemini-3.5-flash',
+        contents: `Analyze daily numbers and generate the action items list. Current AOV is ₹${Math.round(avgOrderValue)}`,
+        config: {
+          systemInstruction: sysInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              insights: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    impact: { type: Type.STRING },
+                    actionLabel: { type: Type.STRING },
+                    campaignPayload: {
+                      type: Type.OBJECT,
+                      properties: {
+                        name: { type: Type.STRING },
+                        audiencePrompt: { type: Type.STRING },
+                        matchedCount: { type: Type.INTEGER },
+                        message: { type: Type.STRING },
+                        channel: { type: Type.STRING }
+                      },
+                      required: ['name', 'audiencePrompt', 'matchedCount', 'message', 'channel']
+                    }
+                  },
+                  required: ['title', 'description', 'impact', 'actionLabel', 'campaignPayload']
+                }
+              }
+            },
+            required: ['insights']
+          }
+        }
+      });
+
+      const parsed = JSON.parse(response.text || '{}');
+      if (parsed.insights && parsed.insights.length >= 3) {
+        return res.json({
+          counts: statsPayload,
+          insights: parsed.insights
+        });
+      }
+    } catch (e) {
+      console.error('[Strategic Insights] Gemini model failed, using analytic heuristics fallbacks:', e);
+    }
+  }
+
+  // Dynamic fallback heuristics
+  const fallbackInsights = [
+    {
+      title: `Lapsed Customers Retention`,
+      description: `Identify ${statsPayload.churnRiskCount} valuable customers with no purchases over 60 days. Sending a flat discount reduces churn rate instantly before complete dormancy.`,
+      impact: `${statsPayload.churnRiskCount} Shoppers Churning`,
+      actionLabel: 'Create Retention Campaign',
+      campaignPayload: {
+        name: 'VIP Customer Retention Campaign 💖',
+        audiencePrompt: 'Spent over ₹5,000, last purchased > 60 days ago',
+        matchedCount: statsPayload.churnRiskCount || 12,
+        message: 'Hey {name}! We miss you! Enjoy 20% off our premium single-origins with code BACK20. Shop: links.xeno.com/back',
+        channel: 'email' as const
+      }
+    },
+    {
+      title: `VIP Growth Push`,
+      description: `${statsPayload.vipCount} customers exceed our ₹10,000 premium loyalty threshold. Introduce them to limited single-origin micro-lots via high open messaging.`,
+      impact: `+₹15,000 Upsell Target`,
+      actionLabel: 'Launch VIP Campaign',
+      campaignPayload: {
+        name: 'Micro-lot Premium Cold Brew Drop ☕',
+        audiencePrompt: 'Super VIP Segment with > ₹10,000 organic spend',
+        matchedCount: statsPayload.vipCount || 5,
+        message: 'Hey {name}! ☕ Exclusive first-access to our limited organic Geisha beans. Use: GEISHA15. Order now: links.xeno.com/geisha',
+        channel: 'whatsapp' as const
+      }
+    },
+    {
+      title: `Dormancy Risk Recovery`,
+      description: `${statsPayload.inactive90Count} customers reached complete dormancy (>90 days inactive). Recapturing this group protects critical marketing margins.`,
+      impact: `₹${statsPayload.revenueAtRisk.toLocaleString()} At Churn Risk`,
+      actionLabel: 'Launch Win-Back',
+      campaignPayload: {
+        name: 'Dormant Leads Win-Back Event ✨',
+        audiencePrompt: 'Inactive leads, last purchased > 90 days ago',
+        matchedCount: statsPayload.inactive90Count || 8,
+        message: 'Hey {name}! It has been a while. Here is continuous cash reward worth ₹500 for your second purchase. Redeem: links.xeno.com/rewards',
+        channel: 'sms' as const
+      }
+    }
+  ];
+
+  res.json({
+    counts: statsPayload,
+    insights: fallbackInsights
   });
 });
 

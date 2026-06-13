@@ -94,44 +94,41 @@ export interface AIMessages {
 
 export function calculateCustomerHealth(customer: Customer) {
   // Static pivot reference representing current mock timestamp
-  const now = new Date('2026-06-11T07:45:01-07:00');
+  const now = new Date('2026-06-12T07:16:58-07:00');
   const lastOrdered = new Date(customer.lastOrderDate);
   const diffMs = Math.abs(now.getTime() - lastOrdered.getTime());
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  // 1. Recency points (scale out of 40)
-  let recencyPoints = 40;
-  if (diffDays > 90) {
-    recencyPoints = 5;
-  } else if (diffDays > 60) {
-    recencyPoints = 12;
-  } else if (diffDays > 30) {
-    recencyPoints = 22;
-  } else if (diffDays > 14) {
-    recencyPoints = 32;
-  }
+  // Recency Score (0 - 100): 100 if ordered today, declining daily
+  const recency = Math.max(0, 100 - diffDays);
 
-  // 2. Frequency score (scale out of 30)
-  const frequencyPoints = Math.min(30, customer.orderCount * 8);
+  // Frequency Score (0 - 100): Maxed at 10 orders
+  const frequency = Math.min(100, customer.orderCount * 10);
 
-  // 3. Monetary score (scale out of 30): normalize around high ltv spent of ₹15,000
-  const monetaryPoints = Math.min(30, Math.round((customer.totalSpent / 15000) * 30));
+  // Spend Score (0 - 100): Normalized around ₹10,000 spend
+  const spend = Math.min(100, Math.round((customer.totalSpent / 10000) * 100));
 
-  const healthScore = Math.max(0, Math.min(100, recencyPoints + frequencyPoints + monetaryPoints));
-  
-  // Engagement Score is weighted heavily on order counts and frequency
-  const engagementScore = Math.max(0, Math.min(100, Math.round((customer.orderCount * 12) + (recencyPoints * 1.4))));
+  // Engagement Score (out of 100)
+  const engagement = Math.max(0, Math.min(100, Math.round((customer.orderCount * 6) + (100 - diffDays * 0.5))));
+
+  // RFM-weighted Health Score = (0.4 * Recency) + (0.3 * Frequency) + (0.2 * Spend) + (0.1 * Engagement)
+  const healthScore = Math.max(0, Math.min(100, Math.round(
+    (0.4 * recency) + 
+    (0.3 * frequency) + 
+    (0.2 * spend) + 
+    (0.1 * engagement)
+  )));
 
   let churnRisk: 'Low' | 'Medium' | 'High' = 'Low';
-  if (diffDays > 60 || healthScore < 42) {
+  if (healthScore < 40) {
     churnRisk = 'High';
-  } else if (diffDays > 30 || healthScore < 72) {
+  } else if (healthScore < 70) {
     churnRisk = 'Medium';
   }
 
   return {
     healthScore,
-    engagementScore,
+    engagementScore: engagement,
     churnRisk
   };
 }

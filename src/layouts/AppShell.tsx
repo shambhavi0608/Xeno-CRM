@@ -9,7 +9,8 @@ import {
   Search, 
   Bell, 
   RefreshCw,
-  LogOut
+  LogOut,
+  Sparkles
 } from 'lucide-react';
 import { useToast } from '../components/ui/Toast.js';
 import { resetDemoDb, createCampaign, launchCampaign } from '../lib/api.js';
@@ -70,6 +71,7 @@ export default function AppShell({ children, title }: AppShellProps) {
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { to: '/copilot', label: 'AI Copilot', icon: <Sparkles className="w-4 h-4" /> },
     { to: '/campaigns', label: 'Campaigns', icon: <Megaphone className="w-4 h-4" /> },
     { to: '/customers', label: 'Customers', icon: <Users className="w-4 h-4" /> },
   ];

@@ -39,7 +39,16 @@ import {
 } from 'recharts';
 
 import { useToast } from '../components/ui/Toast.js';
-import { fetchOverviewAnalytics, fetchCampaigns, launchCampaign, fetchRecentActivity, fetchAIInsights } from '../lib/api.js';
+import { 
+  fetchOverviewAnalytics, 
+  fetchCampaigns, 
+  launchCampaign, 
+  fetchRecentActivity, 
+  fetchAIInsights,
+  fetchDailyInsights,
+  DailyInsightsResponse,
+  createCampaign
+} from '../lib/api.js';
 import { Campaign, AnalyticsOverview, RecentActivityItem, AIInsightItem } from '../types/index.js';
 import { CountUp } from '../components/ui/CountUp.js';
 import { ChannelBadge } from '../components/ui/ChannelBadge.js';
@@ -67,6 +76,9 @@ export default function DashboardPage() {
   // New states for AI insights
   const [insights, setInsights] = useState<AIInsightItem[]>([]);
   const [isInsightsLoading, setIsInsightsLoading] = useState(true);
+  const [dailyInsights, setDailyInsights] = useState<DailyInsightsResponse | null>(null);
+  const [isDailyInsightsLoading, setIsDailyInsightsLoading] = useState(true);
+  const [quickLaunchingId, setQuickLaunchingId] = useState<string | null>(null);
 
   // CSV Export trigger
   const exportAnalyticsCSV = () => {
@@ -121,12 +133,18 @@ export default function DashboardPage() {
   const loadInsights = async () => {
     try {
       setIsInsightsLoading(true);
-      const data = await fetchAIInsights();
+      setIsDailyInsightsLoading(true);
+      const [data, dailyData] = await Promise.all([
+        fetchAIInsights(),
+        fetchDailyInsights()
+      ]);
       setInsights(data);
+      setDailyInsights(dailyData);
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching insights:', e);
     } finally {
       setIsInsightsLoading(false);
+      setIsDailyInsightsLoading(false);
     }
   };
 
@@ -232,6 +250,43 @@ export default function DashboardPage() {
       loadDashboardData(true); // silent sync
     } catch (err: any) {
       error('Launch failed', err.message);
+    }
+  };
+
+  const handleQuickLaunch = async (insight: any, index: number) => {
+    const key = `quick_${index}`;
+    try {
+      setQuickLaunchingId(key);
+      success('Strategic Dispatch Initiated', `Synthesizing and initiating immediate campaign: "${insight.campaignPayload.name}"`);
+      
+      // 1. Create campaign
+      const created = await createCampaign({
+        name: insight.campaignPayload.name,
+        audiencePrompt: insight.campaignPayload.audiencePrompt,
+        channel: insight.campaignPayload.channel,
+        message: insight.campaignPayload.message,
+        matchedCount: insight.campaignPayload.matchedCount,
+        status: 'draft'
+      });
+
+      // 2. Launch campaign
+      const launchRes = await launchCampaign(created.campaignId);
+      
+      if (launchRes.success) {
+        success('Campaign Dispatched!', `Successfully launched "${insight.campaignPayload.name}" to ${insight.campaignPayload.matchedCount} targets.`);
+        // Reload dashboard stats to reflect the new campaign and interaction callback loops!
+        setTimeout(() => {
+          loadDashboardData(true);
+          loadInsights();
+        }, 1500);
+      } else {
+        throw new Error('Launch routine flagged channel delivery errors.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      error('Launch Failed', err.message || 'Could not instantiate campaign pipelines.');
+    } finally {
+      setQuickLaunchingId(null);
     }
   };
 
@@ -423,94 +478,144 @@ export default function DashboardPage() {
       </section>
 
       {/* ========================================================= */}
-      {/* AI INSIGHTS PANEL CARD */}
+      {/* AI INSIGHTS & DAILY STRATEGIC CAMPAIGNS PANEL CARD */}
       {/* ========================================================= */}
       <section className="bg-gradient-to-br from-[#120a0a]/90 to-black/95 backdrop-blur-xl border border-[#FF4500]/20 rounded-2xl p-6 shadow-xl relative overflow-hidden" id="dashboard_ai_insights_panel">
         {/* Glow decoration */}
         <div className="absolute top-0 right-0 w-[200px] h-[200px] bg-[#FF4500]/5 rounded-full filter blur-[60px] pointer-events-none" />
         
-        <div className="flex justify-between items-center mb-5 relative z-10">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-[#FF4500] animate-pulse" />
-            <h3 className="text-sm font-bold tracking-wider uppercase font-mono text-white">
-              AI Insights Engine
-            </h3>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 relative z-10">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#FF4500] animate-pulse" />
+              <h3 className="text-sm font-bold tracking-wider uppercase font-mono text-white">
+                Daily Strategic AI Recommendations (Feature 2)
+              </h3>
+            </div>
+            <p className="text-xs text-stone-400 font-mono">
+              Live telemetry algorithms recommending and dispatching immediate customer activation vouchers.
+            </p>
           </div>
           
           <button 
             onClick={loadInsights}
-            disabled={isInsightsLoading}
-            className="text-[10px] uppercase font-bold tracking-wider font-mono text-stone-400 hover:text-[#FF4500] flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+            disabled={isInsightsLoading || isDailyInsightsLoading}
+            className="text-[10px] uppercase font-bold tracking-wider font-mono text-stone-400 hover:text-[#FF4500] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 self-start md:self-center"
             id="reanalyze_database_btn"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isInsightsLoading ? 'animate-spin' : ''}`} />
-            Re-Analyze Database
+            <RefreshCw className={`w-3.5 h-3.5 ${(isInsightsLoading || isDailyInsightsLoading) ? 'animate-spin' : ''}`} />
+            Run Cohort Sync
           </button>
         </div>
 
-        {isInsightsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 animate-pulse" id="ai_insights_skeletons">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="bg-stone-900/40 border border-white/5 rounded-xl p-4 h-[130px] flex flex-col justify-between" />
+        {/* METRICS COUNTS ROW */}
+        {isDailyInsightsLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-pulse">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-stone-900/30 border border-white/5 rounded-xl h-14" />
             ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4" id="ai_insights_grid">
-            {insights.map(item => {
-              let statusColor = 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/20';
-              if (item.trend === 'down') {
-                statusColor = 'text-[#EF4444] bg-[#EF4444]/15 border-[#EF4444]/25';
-              } else if (item.trend === 'neutral') {
-                statusColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-              }
+        ) : dailyInsights && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="daily_kpi_dashboard">
+            <div className="bg-black/60 border border-white/5 rounded-xl p-3.5">
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-wider block mb-1">60d Churn Risk</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-white font-mono">{dailyInsights.counts.churnRiskCount}</span>
+                <span className="text-[10px] text-[#EF4444] font-mono leading-none">Customers</span>
+              </div>
+            </div>
+            <div className="bg-black/60 border border-white/5 rounded-xl p-3.5">
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-wider block mb-1">Premium VIP Tiers</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-white font-mono">{dailyInsights.counts.vipCount}</span>
+                <span className="text-[10px] text-[#22C55E] font-mono leading-none">Shoppers</span>
+              </div>
+            </div>
+            <div className="bg-black/60 border border-white/5 rounded-xl p-3.5">
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-wider block mb-1">90d Inactive Leads</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-white font-mono">{dailyInsights.counts.inactive90Count}</span>
+                <span className="text-[10px] text-stone-400 font-mono leading-none">Dormant</span>
+              </div>
+            </div>
+            <div className="bg-black/60 border border-white/5 rounded-xl p-3.5">
+              <span className="text-[9px] text-stone-500 font-mono uppercase tracking-wider block mb-1">Revenue At Churn Risk</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-amber-500 font-mono">₹{dailyInsights.counts.revenueAtRisk.toLocaleString()}</span>
+                <span className="text-[9px] text-[#EF4444] font-mono leading-none">Value</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STRATEGIC CARDS CONTAINER */}
+        {(isInsightsLoading || isDailyInsightsLoading) ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 animate-pulse" id="daily_insights_skeletons">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-stone-900/40 border border-white/5 rounded-xl p-5 h-[180px]" />
+            ))}
+          </div>
+        ) : dailyInsights ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5" id="daily_insights_grid">
+            {dailyInsights.insights.map((item, index) => {
+              const launchKey = `quick_${index}`;
+              const isLaunching = quickLaunchingId === launchKey;
+
+              // Channel styling helper
+              let channelLabel = 'whatsapp';
+              if (item.campaignPayload.channel === 'email') channelLabel = 'Email Newsletter';
+              if (item.campaignPayload.channel === 'sms') channelLabel = 'Text SMS';
+              if (item.campaignPayload.channel === 'rcs') channelLabel = 'RCS Feed';
 
               return (
                 <div 
-                  key={item.id} 
-                  className="bg-[#121212]/60 hover:bg-black/40 border border-white/5 hover:border-[#FF4500]/15 rounded-xl p-4 flex flex-col justify-between transition-all duration-300 group shadow-sm hover:shadow-[#FF4500]/5"
-                  id={`ai_insight_card_${item.id}`}
+                  key={index} 
+                  className="bg-[#121212]/60 hover:bg-black/40 border border-white/5 hover:border-[#FF4500]/25 rounded-xl p-5 flex flex-col justify-between transition-all duration-300 group shadow-md"
+                  id={`strategic_insight_card_${index}`}
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className={`text-[8px] uppercase tracking-wider font-mono font-bold px-2 py-0.5 rounded-full border ${statusColor}`}>
-                        {item.category}: {item.impact}
+                      <span className="text-[9px] uppercase tracking-wider font-mono font-bold px-2 py-0.5 rounded-full border border-[#FF4500]/20 bg-[#FF4500]/10 text-amber-500">
+                        {item.impact}
+                      </span>
+                      <span className="text-[10px] text-stone-500 font-mono uppercase">
+                        {channelLabel}
                       </span>
                     </div>
 
-                    <h4 className="text-[12px] font-bold text-white tracking-tight leading-snug group-hover:text-[#FF4500] transition-colors">
+                    <h4 className="text-[13px] font-sans font-bold text-white tracking-tight leading-snug group-hover:text-[#FF4500] transition-colors">
                       {item.title}
                     </h4>
 
-                    <p className="text-[11px] text-stone-400 leading-normal line-clamp-3">
+                    <p className="text-[11px] text-stone-400 leading-relaxed font-sans">
                       {item.description}
                     </p>
                   </div>
 
-                  <div className="pt-3 mt-2 border-t border-white/5 flex items-center justify-between">
-                    <span className="text-[9px] font-bold text-stone-500 font-mono tracking-wider flex items-center gap-1 uppercase">
-                      {item.trend === 'up' ? '▲ POSITIVE' : item.trend === 'down' ? '▼ CONCERN' : '● STABLE'}
+                  <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-stone-400 font-mono">
+                      Target: {item.campaignPayload.matchedCount} users
                     </span>
-                    {item.actionLabel && (
-                      <button
-                        onClick={() => {
-                          if (item.category === 'churn' || item.category === 'revenue') {
-                            navigate('/campaigns/create');
-                          } else if (item.category === 'channel' || item.category === 'conversion') {
-                            const section = document.getElementById('recent_activity_section');
-                            section?.scrollIntoView({ behavior: 'smooth' });
-                          } else {
-                            success('Insight Detail', `Action queued: ${item.actionLabel}`);
-                          }
-                        }}
-                        className="text-[9px] font-bold text-[#FF4500] hover:underline cursor-pointer font-mono"
-                      >
-                        {item.actionLabel} →
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={quickLaunchingId !== null}
+                      onClick={() => handleQuickLaunch(item, index)}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-[#FF4500] hover:text-[#FF6A22] cursor-pointer font-mono uppercase tracking-wider disabled:opacity-40"
+                    >
+                      {isLaunching ? (
+                        <>Launching...</>
+                      ) : (
+                        <>{item.actionLabel} →</>
+                      )}
+                    </button>
                   </div>
                 </div>
               );
             })}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-stone-500 text-xs font-mono">
+            No Daily Strategic Campaigns generated. Run Database cohort sync.
           </div>
         )}
       </section>
