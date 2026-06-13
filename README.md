@@ -88,34 +88,34 @@ A full decoupled webhook pipeline simulates a real messaging vendor — no third
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        CLIENT (Browser)                      │
-│  React 19 + TypeScript + Tailwind CSS + TanStack Query       │
-│  Pages: Dashboard | Customers | Campaigns | Analytics        │
+│                        CLIENT (Browser)                     │
+│  React 19 + TypeScript + Tailwind CSS + TanStack Query      │
+│  Pages: Dashboard | Customers | Campaigns | Analytics       │
 └───────────────────────┬─────────────────────────────────────┘
                         │ HTTP / REST
 ┌───────────────────────▼─────────────────────────────────────┐
-│                    EXPRESS SERVER (server.ts)                 │
-│                                                              │
+│                    EXPRESS SERVER (server.ts)               │
+│                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │
 │  │  REST API    │  │  AI Layer    │  │  Async Simulator  │  │
 │  │  /api/*      │  │  Gemini SDK  │  │  Webhook Pipeline │  │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘  │
-│         │                 │                    │             │
-│  ┌──────▼─────────────────▼────────────────────▼──────────┐  │
-│  │                  In-Memory JSON Database                 │  │
-│  │          customers | orders | campaigns | events        │  │
-│  └─────────────────────────────────────────────────────────┘  │
+│         │                 │                    │            │
+│  ┌──────▼─────────────────▼────────────────────▼─────────┐  │
+│  │                  In-Memory JSON Database                 │  
+│  │          customers | orders | campaigns | events         │  
+│  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                         │
 ┌───────────────────────▼──────────┐
-│         Firebase / Firestore      │
-│    (Auth & Optional Persistence)  │
+│         Firebase / Firestore     │
+│    (Auth & Optional Persistence) │
 └──────────────────────────────────┘
                         │
 ┌───────────────────────▼──────────┐
-│       Google Gemini API           │
-│  (Segmentation, Copywriting,      │
-│   Insights, Prediction)           │
+│       Google Gemini API          │
+│  (Segmentation, Copywriting,     │
+│   Insights, Prediction)          │
 └──────────────────────────────────┘
 ```
 
