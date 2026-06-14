@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import GeospatialDensityMap, { getCustomerRegion } from '../components/GeospatialDensityMap.js';
 import { 
   Users, 
   Search, 
@@ -17,7 +19,8 @@ import {
   Download,
   Plus,
   Edit,
-  Trash2
+  Trash2,
+  Globe
 } from 'lucide-react';
 import { fetchCustomers, fetchCustomerDetails, ingestCustomerData, createCustomer, updateCustomer, deleteCustomer } from '../lib/api.js';
 import { Customer, Order, calculateCustomerHealth } from '../types/index.js';
@@ -50,12 +53,32 @@ const hashAvatarBg = (name: string) => {
 
 export default function CustomersPage() {
   const { success, error } = useToast();
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(urlSearch);
   const [selectedTag, setSelectedTag] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
+
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [showDensityMap, setShowDensityMap] = useState(false);
+
+  const displayedCustomers = selectedRegion
+    ? customers.filter(c => getCustomerRegion(c) === selectedRegion)
+    : customers;
+
+  useEffect(() => {
+    if (urlSearch !== search) {
+      setSearch(urlSearch);
+    }
+  }, [urlSearch]);
+
+  // Clear region selection on search or tab tag switch
+  useEffect(() => {
+    setSelectedRegion(null);
+  }, [search, selectedTag]);
 
   // Drawer state management
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -410,6 +433,19 @@ export default function CustomersPage() {
             <Database className="w-3.5 h-3.5" />
             Ingest Data
           </button>
+
+          {/* Toggle Geospatial Map Button */}
+          <button 
+            onClick={() => setShowDensityMap(!showDensityMap)}
+            className={`flex text-xs font-semibold py-2 px-4 rounded-lg border transition-all cursor-pointer font-sans items-center gap-1.5 active:scale-95 ${
+              showDensityMap 
+                ? 'bg-[#FF4500]/12 border-[#FF4500]/40 text-[#FF4500] shadow-md' 
+                : 'border-white/10 text-stone-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 animate-pulse" />
+            {showDensityMap ? 'Hide Target Map' : 'Show Target Map'}
+          </button>
           
           {/* Diagnostic Ingestion Utility */}
           {customers.length > 0 && (
@@ -422,6 +458,17 @@ export default function CustomersPage() {
           )}
         </div>
       </div>
+
+      {/* D3 Geospatial demographic density panel */}
+      {showDensityMap && (
+        <div className="mb-6">
+          <GeospatialDensityMap 
+            customers={customers} 
+            selectedRegion={selectedRegion} 
+            onSelectRegion={setSelectedRegion} 
+          />
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* SEARCH + FILTER CHIPS */}
@@ -473,15 +520,19 @@ export default function CustomersPage() {
             Retry
           </button>
         </div>
-      ) : customers.length === 0 ? (
+      ) : displayedCustomers.length === 0 ? (
         <div className="p-12 text-center rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 flex flex-col items-center justify-center">
           <Users className="w-12 h-12 text-[#5c4a4a] mb-3 animate-pulse" />
           <h3 className="text-sm font-semibold text-white">No customers found</h3>
-          <p className="text-stone-400 text-xs mt-1">Try refining search parameters or reset demo metrics.</p>
+          <p className="text-stone-400 text-xs mt-1">
+            {selectedRegion 
+              ? `No profiles match this segment inside the "${selectedRegion}" hub. Pick a different regional node or click clear.`
+              : 'Try refining search parameters or reset demo metrics.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {customers.map((c) => {
+          {displayedCustomers.map((c) => {
             const initials = c.name
               .split(' ')
               .map((n) => n[0])

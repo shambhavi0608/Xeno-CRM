@@ -24,9 +24,11 @@ import {
   generateAICopy, 
   createCampaign, 
   launchCampaign,
-  predictCampaign
+  predictCampaign,
+  fetchCustomers
 } from '../lib/api.js';
 import { AISuggestion, AIMessages, Customer, CampaignPrediction } from '../types/index.js';
+import { addComplianceLog } from '../lib/compliance.js';
 
 export default function CampaignBuilderPage() {
   const navigate = useNavigate();
@@ -84,6 +86,36 @@ export default function CampaignBuilderPage() {
       runPrediction();
     }
   }, [step, selectedChannel, messageText, audiencePrompt, aiSuggestion]);
+
+  // AI Segment Proposal Engine Hooks
+  const [customers, setCustomers] = useState<Customer[]>([]);
+
+  useEffect(() => {
+    const loadCust = async () => {
+      try {
+        const res = await fetchCustomers();
+        setCustomers(res);
+      } catch (err) {
+        console.error('Failed to load customers for AI Segment Builder suggestions', err);
+      }
+    };
+    loadCust();
+  }, []);
+
+  const handleSelectSuggestedSegment = async (promptText: string) => {
+    setAudiencePrompt(promptText);
+    setLoading(true);
+    setAiSuggestion(null);
+    try {
+      const res = await suggestSegment(promptText);
+      setAiSuggestion(res);
+      success('AI Suggestion Verified', `Match calculation complete: ${res.count} profiles isolated successfully.`);
+    } catch (err: any) {
+      error('NLP Segment failed', err.message || 'Error compiling natural English query terms.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // -----------------------------------------------------------------
   // HANDLERS
@@ -176,6 +208,11 @@ export default function CampaignBuilderPage() {
 
       // Launch it
       await launchCampaign(draft.campaignId);
+      addComplianceLog(
+        'CAMPAIGN_LAUNCHED', 
+        `Campaign "${campaignName}" compiled and successfully dispatched on channel "${selectedChannel}" targeting segment cohort.`, 
+        'campaign'
+      );
 
       setLaunchSuccess(true);
       success('Success', `${campaignName} launched! Redirection active.`);
@@ -304,9 +341,90 @@ export default function CampaignBuilderPage() {
                 <h3 className="text-base font-semibold text-white tracking-tight flex items-center gap-2 font-mono">
                   <PlusCircle className="w-5 h-5 text-[#FF4500]" /> Define Target Audience Cohorts
                 </h3>
-                <p className="text-stone-400 text-xs mt-1 leading-normal">
-                  Mochi utilizes a smart Hybrid NLP evaluation. Simply write down who you are targeting in natural English and we will filter customer records automatically.
+                <p className="text-stone-400 text-xs mt-1 leading-normal animate-fade-in">
+                  Mochi utilizes a smart Hybrid NLP evaluation. Simply write down who you are targeting in natural English, or tap one of our automated engagement recommendations below to hydrate custom segments.
                 </p>
+              </div>
+
+              {/* AI Strategic Proposals Grid Row */}
+              <div className="space-y-3.5 pt-2 border-t border-white/5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                  <span className="text-[10px] uppercase font-bold text-stone-400 font-mono tracking-wider">⚡ AI Strategic Cohort Suggestions (Based on Current Engagement)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  
+                  {/* Card 1: VIP Loyalists */}
+                  <div className="bg-white/2 border border-white/5 hover:border-amber-500/30 p-4 rounded-xl flex flex-col justify-between transition-all group relative">
+                    <div>
+                      <span className="text-[8px] bg-amber-500/10 text-amber-500 font-bold px-1.5 py-0.5 rounded border border-amber-500/20 font-mono tracking-wider uppercase block w-max">VIP Cohort</span>
+                      <h4 className="text-xs font-semibold text-white mt-2 group-hover:text-amber-400 transition-colors">Premium Shoppers</h4>
+                      <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                        Top recurring organic buyers spend over ₹5,000 on beans and equipment.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                      <span className="text-[9px] font-mono text-stone-500">
+                        Matches: {customers.length > 0 ? customers.filter(c => c.totalSpent > 5000).length : '12'} accounts
+                      </span>
+                      <button 
+                        onClick={() => handleSelectSuggestedSegment('Retrieve customers who are loyal high-value spenders over ₹5,000')}
+                        disabled={loading}
+                        className="text-[9px] font-bold font-mono text-[#FF4500] hover:text-[#FF8C00] cursor-pointer"
+                      >
+                        Apply Segment &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Win-back High Churn-Risk */}
+                  <div className="bg-white/2 border border-white/5 hover:border-red-500/30 p-4 rounded-xl flex flex-col justify-between transition-all group relative">
+                    <div>
+                      <span className="text-[8px] bg-red-500/10 text-red-400 font-bold px-1.5 py-0.5 rounded border border-red-500/20 font-mono tracking-wider uppercase block w-max">At-Risk Recovery</span>
+                      <h4 className="text-xs font-semibold text-white mt-2 group-hover:text-red-400 transition-colors">Win-back At Risk</h4>
+                      <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                        Focus on buyers displaying dropping interaction metrics and high churn danger.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                      <span className="text-[9px] font-mono text-stone-500">
+                        Matches: {customers.length > 0 ? customers.filter(c => c.churnRisk === 'High').length : '3'} accounts
+                      </span>
+                      <button 
+                        onClick={() => handleSelectSuggestedSegment('Isolate all shoppers flagged with High Churn Risk indicators to prevent brand exit')}
+                        disabled={loading}
+                        className="text-[9px] font-bold font-mono text-[#FF4500] hover:text-[#FF8C00] cursor-pointer"
+                      >
+                        Apply Segment &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Warm Leads */}
+                  <div className="bg-white/2 border border-white/5 hover:border-emerald-500/30 p-4 rounded-xl flex flex-col justify-between transition-all group relative">
+                    <div>
+                      <span className="text-[8px] bg-emerald-500/10 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono tracking-wider uppercase block w-max">Activation Core</span>
+                      <h4 className="text-xs font-semibold text-white mt-2 group-hover:text-emerald-400 transition-colors">Warm & New Accounts</h4>
+                      <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
+                        Nudge newly registered coffee lovers or warm prospects with a direct voucher offer.
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                      <span className="text-[9px] font-mono text-stone-500">
+                        Matches: {customers.length > 0 ? customers.filter(c => c.tags.includes('new') || c.orderCount <= 1).length : '5'} accounts
+                      </span>
+                      <button 
+                        onClick={() => handleSelectSuggestedSegment('Identify shoppers tagged as new or whose order count is less than or equal to 1 for first launch trial')}
+                        disabled={loading}
+                        className="text-[9px] font-bold font-mono text-[#FF4500] hover:text-[#FF8C00] cursor-pointer"
+                      >
+                        Apply Segment &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
               </div>
 
               <div className="space-y-2">

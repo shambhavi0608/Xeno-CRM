@@ -210,3 +210,172 @@ h1, h2, h3, .font-display {
   animation: orangePulse 1.8s infinite ease-in-out;
   border-color: rgba(255, 90, 31, 0.4) !important;
 }
+
+/* ========================================================= */
+/* ACCESSIBILITY HIGH CONTRAST LIGHT THEME (.theme-light) */
+/* ========================================================= */
+.theme-light {
+  background-color: #FAFAFA !important;
+  background-image: none !important;
+  color: #1F2937 !important;
+}
+
+.theme-light body {
+  background-color: #FAFAFA !important;
+  background-image: none !important;
+  color: #1F2937 !important;
+}
+
+/* Sidebar styling for light mode */
+.theme-light aside {
+  background-color: #E2E8F0 !important;
+  border-right-color: #CBD5E1 !important;
+}
+
+.theme-light aside .text-white {
+  color: #1E293B !important;
+}
+
+.theme-light aside .text-[#7a6f6f] {
+  color: #475569 !important;
+}
+
+.theme-light aside .hover-item:hover, .theme-light aside .active {
+  background-color: rgba(255, 69, 0, 0.1) !important;
+  border-color: #FF4500 !important;
+}
+
+/* Headings and generic typography text */
+.theme-light h1, 
+.theme-light h2, 
+.theme-light h3, 
+.theme-light h4, 
+.theme-light h5, 
+.theme-light h6,
+.theme-light .text-white,
+.theme-light .text-stone-100,
+.theme-light .text-stone-200 {
+  color: #0F172A !important;
+}
+
+/* Secondary texts and labels */
+.theme-light .text-stone-300, 
+.theme-light .text-stone-400, 
+.theme-light .text-[#A0A0A0],
+.theme-light .text-[#808080],
+.theme-light .text-stone-550,
+.theme-light .text-stone-500,
+.theme-light .text-[#7a6f6f] {
+  color: #334155 !important;
+}
+
+/* Card components */
+.theme-light .card-editorial,
+.theme-light .bg-[#120a0a],
+.theme-light .bg-[#120a0a]\/80,
+.theme-light .bg-[#120a0a]\/90,
+.theme-light .bg-[#120a0a]\/95,
+.theme-light .bg-[#0a0505]\/40,
+.theme-light .bg-[#161616],
+.theme-light .bg-[#141414],
+.theme-light .bg-white\/2,
+.theme-light .bg-white\/3,
+.theme-light .bg-white\/4,
+.theme-light .bg-white\/5,
+.theme-light .bg-stone-900,
+.theme-light .bg-stone-900\/30 {
+  background-color: #FFFFFF !important;
+  color: #1E293B !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Active cards & highlighting borders */
+.theme-light .card-editorial-active {
+  background-color: #FFFFFF !important;
+  border-color: #FF4500 !important;
+  box-shadow: 0 4px 12px rgba(255, 69, 0, 0.08) !important;
+}
+
+/* Inputs & Forms in Light Mode */
+.theme-light input, 
+.theme-light select, 
+.theme-light textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+.theme-light input::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Navigation items hover states */
+.theme-light a:hover {
+  color: #FF4500 !important;
+}
+
+/* Buttons (with white outline) */
+.theme-light .border-white\/8,
+.theme-light .border-white\/10,
+.theme-light .border-white\/20,
+.theme-light .border-white\/6 {
+  border-color: #CBD5E1 !important;
+}
+
+/* Table overrides */
+.theme-light table {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light thead, .theme-light table thead {
+  background-color: #F1F5F9 !important;
+  color: #1E293B !important;
+}
+
+.theme-light th {
+  color: #334155 !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+.theme-light td {
+  border-bottom-color: #F1F5F9 !important;
+}
+
+.theme-light tr {
+  color: #334155 !important;
+}
+
+.theme-light tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+.theme-light .hover\:bg-white\/3:hover {
+  background-color: #F8FAFC !important;
+}
+
+/* Progress bar rail background for light theme */
+.theme-light .bg-white\/10 {
+  background-color: #E2E8F0 !important;
+}
+
+/* Notifications badge and counters */
+.theme-light .bg-white\/6 {
+  background-color: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Header border */
+.theme-light header {
+  background-color: #F8FAFC !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+/* Glow bubbles - fully silent to avoid cluttering in high contrast mode */
+.theme-light .absolute.rounded-full.blur-\[120px\],
+.theme-light .absolute.rounded-full.blur-\[100px\],
+.theme-light [class*="animate-glow-"] {
+  display: none !important;
+  opacity: 0 !important;
+}
