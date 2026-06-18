@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, MessageSquare, Mail, Smartphone, Send, SendHorizontal, HelpCircle, ArrowRight, Loader2, RefreshCw, Layers } from 'lucide-react';
 import { useToast } from '../components/ui/Toast.js';
-import { createCampaign, launchCampaign } from '../lib/api.js';
+import { aiService, campaignService } from '../services/index.js';
 
 interface CopilotResponse {
   segment: {
@@ -17,6 +17,14 @@ interface CopilotResponse {
   };
   explainabilitySteps: string[];
   matchedCount: number;
+  intent?: string;
+  customers?: {
+    name: string;
+    risk: 'Low' | 'Medium' | 'High' | string;
+    reason: string;
+    recommendedAction: string;
+  }[];
+  summary?: string;
 }
 
 export default function AICopilot() {
@@ -35,16 +43,28 @@ export default function AICopilot() {
 
   const examplePrompts = [
     {
-      title: "Re-engage Cold Leads",
-      text: "Bring back inactive users who haven't purchased in 60 days. Offer 15% discount."
+      title: "Predict Cohort Churn",
+      text: "Predict churn risk across segments and design targeted recovery offers."
     },
     {
-      title: "VIP Special Access",
-      text: "Invite top loyal shoppers who spend over 10000 to try premium limited edition coffees."
+      title: "Show Revenue Forecast",
+      text: "Show revenue forecast detail and expected growth figures for the CRM."
     },
     {
-      title: "Activate New registrants",
-      text: "Send a friendly welcome offer with 10% off to newly signed up consumers."
+      title: "Audit High Value",
+      text: "Show high value customer profiles with spend metrics and reservation hooks."
+    },
+    {
+      title: "Lapsed Customer Audit",
+      text: "Show inactive customers and design fallback email discounts."
+    },
+    {
+      title: "VIP WhatsApp Push",
+      text: "Generate WhatsApp campaign targeting VIP buyers with premium micro-lots."
+    },
+    {
+      title: "Activation Welcome",
+      text: "Generate SMS campaign for our first-time buyers with welcome coupon."
     }
   ];
 
@@ -59,17 +79,7 @@ export default function AICopilot() {
     info('AI Copilot Orchestrator', 'Analyzing user prompt and evaluating high-potential customer lists...');
     
     try {
-      const response = await fetch('/api/v1/copilot/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userPrompt: activeText })
-      });
-
-      if (!response.ok) {
-        throw new Error('Copilot Service is offline or rate-limited.');
-      }
-
-      const data: CopilotResponse = await response.json();
+      const data = await aiService.chat(activeText);
       setCopilotData(data);
       setEditMessage(data.message);
       
@@ -97,7 +107,7 @@ export default function AICopilot() {
 
     try {
       // 1. Create campaign
-      const created = await createCampaign({
+      const created = await campaignService.create({
         name: editCampaignName,
         audiencePrompt: copilotData.segment.rule,
         channel: copilotData.channel,
@@ -107,7 +117,7 @@ export default function AICopilot() {
       });
 
       // 2. Launch campaign
-      const result = await launchCampaign(created.campaignId);
+      const result = await campaignService.launch(created.campaignId);
 
       if (result.success) {
         success('Campaign Dispatched!', `Successfully sent campaign "${editCampaignName}" to ${copilotData.matchedCount} shoppers!`);
@@ -274,6 +284,50 @@ export default function AICopilot() {
                 </span>
               </div>
             </div>
+
+            {/* Real-time AI CRM Audit Intelligence widget */}
+            {(copilotData.summary || (copilotData.customers && copilotData.customers.length > 0)) && (
+              <div className="bg-[#FF4500]/5 border border-[#FF4500]/15 rounded-2xl p-5 space-y-4 select-none animate-[fadeIn_0.3s_ease-out] backdrop-blur-md">
+                <div className="flex items-center gap-2 text-[#FF4500]">
+                  <Sparkles className="w-4.5 h-4.5" />
+                  <span className="text-xs font-bold uppercase tracking-wider font-mono">
+                    AI CRM Audit Intelligence ({copilotData.intent ? copilotData.intent.replace(/_/g, ' ') : 'analysis'})
+                  </span>
+                </div>
+                
+                {copilotData.summary && (
+                  <p className="text-stone-200 text-sm font-medium leading-relaxed font-sans">
+                    {copilotData.summary}
+                  </p>
+                )}
+
+                {copilotData.customers && copilotData.customers.length > 0 && (
+                  <div className="grid grid-cols-1 gap-3 pt-1">
+                    {copilotData.customers.map((cust, cIdx) => (
+                      <div key={cIdx} className="bg-black/60 border border-white/5 hover:border-[#FF4500]/20 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs transition-all duration-300">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white font-sans text-sm">{cust.name}</span>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${
+                              cust.risk === 'High' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                              cust.risk === 'Medium' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' :
+                              'bg-[#22C55E]/10 border border-[#22C55E]/20 text-[#22C55E]'
+                            }`}>
+                              Risk: {cust.risk}
+                            </span>
+                          </div>
+                          <p className="text-stone-300 text-[11px] font-sans leading-relaxed">{cust.reason}</p>
+                        </div>
+                        <div className="md:text-right font-mono text-[10px] space-y-1 md:max-w-[45%]">
+                          <span className="text-[#FF4500] font-sans font-semibold block mb-0.5 uppercase tracking-wider text-[9px]">Recommended Actions:</span>
+                          <span className="text-stone-200 antialiased leading-tight bg-white/5 px-2 py-1 rounded inline-block">{cust.recommendedAction}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Feature 3: Actionable explainability Toggle */}
             <div className="border-t border-b border-white/5 py-3 bg-black/30 px-4 rounded-xl">

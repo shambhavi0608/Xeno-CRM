@@ -9,7 +9,10 @@ import {
   RecentActivityItem,
   calculateCustomerHealth,
   AIInsightItem,
-  CampaignPrediction
+  CampaignPrediction,
+  Customer360Data,
+  DailyInsightsResponse,
+  CopilotResponse
 } from '../types/index.js';
 import { db, auth, handleFirestoreError, OperationType } from './firebase.js';
 import { SEED_CUSTOMERS, SEED_CAMPAIGNS, SEED_ORDERS_MAPPING } from '../components/FirebaseProvider.js';
@@ -344,6 +347,15 @@ export async function fetchCustomerDetails(id: string): Promise<{ customer: Cust
     };
   }
   return details;
+}
+
+// -------------------------------------------------------------
+// 2b. GET CUSTOMER 360 DETAILED INSIGHTS (Firestore * Gemini)
+// -------------------------------------------------------------
+export async function fetchCustomer360(id: string): Promise<Customer360Data> {
+  const res = await fetch(`${API_BASE}/customers/${id}/customer360`);
+  if (!res.ok) throw new Error('Failed to fetch Customer 360 compilation.');
+  return res.json();
 }
 
 // -------------------------------------------------------------
@@ -1250,27 +1262,6 @@ export async function fetchRecentActivity(): Promise<RecentActivityItem[]> {
 // -------------------------------------------------------------
 // 13. FETCH AI INSIGHTS
 // -------------------------------------------------------------
-export interface DailyInsightsResponse {
-  counts: {
-    churnRiskCount: number;
-    vipCount: number;
-    inactive90Count: number;
-    revenueAtRisk: number;
-  };
-  insights: {
-    title: string;
-    description: string;
-    impact: string;
-    actionLabel: string;
-    campaignPayload: {
-      name: string;
-      audiencePrompt: string;
-      matchedCount: number;
-      message: string;
-      channel: 'whatsapp' | 'email' | 'sms' | 'rcs';
-    };
-  }[];
-}
 
 export async function fetchDailyInsights(): Promise<DailyInsightsResponse> {
   const res = await fetch(`${API_BASE}/v1/insights/daily`);
@@ -1625,4 +1616,18 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
   });
   if (!res.ok) throw new Error('Failed to delete campaign');
 }
+
+/**
+ * Chat with the Gemini AI Copilot orchestration system
+ */
+export async function chatWithCopilot(userPrompt: string): Promise<CopilotResponse> {
+  const res = await fetch(`${API_BASE}/v1/copilot/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userPrompt })
+  });
+  if (!res.ok) throw new Error('Copilot Service is offline or rate-limited.');
+  return res.json();
+}
+
 

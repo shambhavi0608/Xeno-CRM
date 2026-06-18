@@ -3,6 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { 
   loadDatabase, 
   saveDatabase, 
@@ -15,11 +17,65 @@ import {
   writeOrders,
   writeCustomers
 } from './src/server/db.js';
-import { Customer, Order, Campaign, CommunicationEvent, AnalyticsOverview } from './src/types/index.js';
+import { Customer, Order, Campaign, CommunicationEvent, AnalyticsOverview, calculateCustomerHealth } from './src/types/index.js';
 import { optimizeChannel } from './src/server/channelOptimizer.js';
 
 const app = express();
+
+// Security headers with Helmet
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Disable DENY inside development environment to ensure iframe previews function beautifully, but keep enabled for production
+  frameguard: process.env.NODE_ENV === 'production' ? { action: 'deny' } : false
+}));
+
+// Strip identifying headers to prevent scanner profiling
+app.disable('x-powered-by');
+
 app.use(express.json());
+
+// 60 requests per minute limit across general CRM endpoints
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. General dashboard rate limit exceeded.' },
+  statusCode: 429
+});
+
+// Apply general rate limit to all /api/ endpoints except specific LLM / Campaign ones
+app.use('/api', generalLimiter);
+
+// 10 requests per minute rate limit specifically for LLM-powered/AI Campaign operations
+const copilotLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => {
+    // Identity check - match user identifier token or fallback to remote address
+    return req.headers.authorization || req.ip || '';
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many campaign or copilot requests. Rate limit is 10 requests per minute.' },
+  statusCode: 429,
+  handler: (req, res, next, options) => {
+    res.setHeader('Retry-After', '60');
+    res.status(options.statusCode).json(options.message);
+  }
+});
+
+// Protect specified AI and prediction endpoints with copilot rate limiter
+app.use([
+  '/api/copilot/generate', 
+  '/api/v1/copilot/generate',
+  '/api/segment/suggest',
+  '/api/campaigns/generate-copy',
+  '/api/campaigns/predict',
+  '/api/analytics/insights'
+], copilotLimiter);
 
 const PORT = 3000;
 
@@ -178,6 +234,284 @@ app.get('/api/customers/:id', (req, res) => {
   const customerOrders = orders.filter(o => o.customerId === req.params.id);
   res.json({ customer, orders: customerOrders });
 });
+
+// 3c. GET CUSTOMER 360 COMPREHENSIVE INSIGHTS (Firestore * Gemini)
+app.get('/api/customers/:id/customer360', async (req, res) => {
+  try {
+    const customers = getCustomers();
+    const orders = getOrders();
+    const customer = customers.find(c => c.id === req.params.id);
+    
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const customerOrders = orders.filter(o => o.customerId === req.params.id);
+
+    // 1. Derive deterministic metrics
+    const last = new Date(customer.lastOrderDate);
+    const now = new Date('2026-06-12T07:16:58-07:00');
+    const diffMs = Math.abs(now.getTime() - last.getTime());
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    const recencyScore = diffDays <= 7 ? 5 : diffDays <= 30 ? 4 : diffDays <= 90 ? 3 : diffDays <= 180 ? 2 : 1;
+    const frequencyScore = customer.orderCount >= 10 ? 5 : customer.orderCount >= 5 ? 4 : customer.orderCount >= 3 ? 3 : customer.orderCount >= 2 ? 2 : 1;
+    const monetaryScore = customer.totalSpent >= 15000 ? 5 : customer.totalSpent >= 10000 ? 4 : customer.totalSpent >= 5000 ? 3 : customer.totalSpent >= 2000 ? 2 : 1;
+    const rfmScore = `R${recencyScore}-F${frequencyScore}-M${monetaryScore}`;
+    const avgOrderValue = Math.round(customer.totalSpent / (customer.orderCount || 1));
+
+    const getCompany = (email: string, name: string) => {
+      const domain = email.split('@')[1];
+      if (domain && domain !== 'gmail.com' && domain !== 'yahoo.com' && domain !== 'hotmail.com' && domain !== 'outlook.com') {
+        const parts = domain.split('.');
+        return parts[0].charAt(0).toUpperCase() + parts[0].slice(1) + ' Corp';
+      }
+      const sur = name.split(' ').slice(-1)[0] || 'Malhotra';
+      return `${sur} Inc`;
+    };
+    const companyName = getCompany(customer.email, customer.name);
+    
+    const customerStatus = diffDays > 60 ? 'dormant' : diffDays > 30 ? 'inactive' : 'active';
+
+    // 2. Mock timeline events temporally linked
+    const baseDate = new Date(customer.lastOrderDate);
+    const dateOpen = new Date(baseDate);
+    dateOpen.setHours(dateOpen.getHours() - 4);
+    const dateSent = new Date(baseDate);
+    dateSent.setDate(dateSent.getDate() - 1);
+    const dateAI = new Date(baseDate);
+    dateAI.setDate(dateAI.getDate() + 2);
+
+    const timeline: any[] = [];
+
+    customerOrders.forEach((o) => {
+      timeline.push({
+        id: `tl_ord_${o.orderId}`,
+        type: 'order',
+        title: `Order Placed: ₹${o.amount.toLocaleString()}`,
+        description: `Purchased: ${o.items.join(', ')}`,
+        timestamp: o.timestamp
+      });
+    });
+
+    timeline.push({
+      id: `tl_sent_${customer.id}`,
+      type: 'sent',
+      title: 'Campaign Delivered: Indian Coffee Roastings',
+      description: 'Dispatched custom strategy WhatsApp newsletter to user.',
+      timestamp: dateSent.toISOString().split('T')[0]
+    });
+
+    timeline.push({
+      id: `tl_opened_${customer.id}`,
+      type: 'opened',
+      title: 'Campaign Message Opened',
+      description: 'User unlocked and opened WhatsApp content within 15 minutes of receipt.',
+      timestamp: dateOpen.toISOString().split('T')[0]
+    });
+
+    timeline.push({
+      id: `tl_resp_${customer.id}`,
+      type: 'responded',
+      title: 'Promotion Link Clicked',
+      description: 'User clicked promotional filter coffee dabara link, triggering checkout flow.',
+      timestamp: baseDate.toISOString().split('T')[0]
+    });
+
+    const calculatedHealth = calculateCustomerHealth(customer);
+
+    timeline.push({
+      id: `tl_rec_${customer.id}`,
+      type: 'ai_recommendation',
+      title: 'AI Smart Next Best Action Generated',
+      description: `Recommend 'Cold Brew Kit' next week. Customer Engagement is at ${calculatedHealth.engagementScore}%.`,
+      timestamp: dateAI.toISOString().split('T')[0]
+    });
+
+    timeline.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    // 3. Fallback insights generator
+    const getFallbackInsights = () => {
+      const isHighValue = customer.tags.includes('high-value') || customer.totalSpent > 8000;
+      const isAtRisk = calculatedHealth.churnRisk === 'High' || customer.tags.includes('at-risk');
+      const isNew = customer.orderCount <= 1 || customer.tags.includes('new');
+      
+      let summary = '';
+      let behaviour = '';
+      let riskAnalysis = '';
+      let recommendedAction = '';
+      let upsellOpportunity = '';
+      let predictedRev = Math.round(customer.totalSpent * 0.25);
+      let expectedGrow = 10;
+
+      if (isNew) {
+        summary = `Newly registered customer with standard initial traction in roastery supplies and sample custom powders.`;
+        behaviour = `Acquisition phase. Low purchase density but high onboarding interactions support a strong product conversion ceiling.`;
+        riskAnalysis = `Standard welcome churn risk. Requires immediate trial validation to establish long-term brand stickiness.`;
+        recommendedAction = `Trigger premium onboarding bundle workflow including discount codes and recipe blogs via WhatsApp.`;
+        upsellOpportunity = `Standard French Press Unit or Starter Pour-over Kit.`;
+        predictedRev = Math.max(3000, Math.round(customer.totalSpent * 1.5));
+        expectedGrow = 45;
+      } else if (isAtRisk) {
+        summary = `Lapsed brand shopper on the verge of churn. Order frequency has dropped significantly over the past quarter.`;
+        behaviour = `Lapsed habits. Customer previously purchased whole bean roast packs and manual grinders but hasn't browsed in 60+ days.`;
+        riskAnalysis = `Critical churn risk due to extended period since last session. Competitor redirection is highly likely.`;
+        recommendedAction = `Trigger automated high-priority SMS containing an exclusive 25% direct checkout voucher.`;
+        upsellOpportunity = `Limited Release Bourbon Microlot Packs with personalized brewing notes.`;
+        predictedRev = Math.round(customer.totalSpent * 0.1);
+        expectedGrow = -15;
+      } else if (isHighValue) {
+        summary = `Elite brand loyalist demonstrating steady high-volume equipment selections and gourmet micro-lot reserve repeat orders.`;
+        behaviour = `Frequent high-ticket shopping. Prefer rare roasted whole beans. Enjoys physical coffee-brewing workshops.`;
+        riskAnalysis = `Negligible churn risk; outstanding transactional stickiness and high product affinity.`;
+        recommendedAction = `Enroll into Mochi VIP Circle, providing first access to rare micro-lot coffee batches and physical roastery invitations.`;
+        upsellOpportunity = `Premium Electric Coffee Grinder or Exclusive Geisha Blend Reserve.`;
+        predictedRev = Math.round(customer.totalSpent * 0.4);
+        expectedGrow = 20;
+      } else {
+        summary = `Consistent mid-value regular shopper with stable replenishment intervals for whole beans and paper filter cups.`;
+        behaviour = `Steady seasonal purchasing behavior with moderate baseline basket size and clear preference for roasted powder.`;
+        riskAnalysis = `Stable retention but risks migrating to other brands if standard replenishment reminders are not sent.`;
+        recommendedAction = `Propose an automated monthly roasting subscription model to streamline coffee pantry refills.`;
+        upsellOpportunity = `Subscribe & Save 10% on Standard Monsoon Malabar Roast.`;
+        predictedRev = Math.round(customer.totalSpent * 0.35);
+        expectedGrow = 12;
+      }
+
+      return {
+        predictedRevenue: predictedRev,
+        expectedGrowth: expectedGrow,
+        aiInsight: {
+          summary,
+          behaviour,
+          riskAnalysis,
+          recommendedAction,
+          upsellOpportunity
+        }
+      };
+    };
+
+    const fallback = getFallbackInsights();
+
+    // 4. Try Gemini integration
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's Executive Customer 360 Strategy Analyst.
+Given a customer's high-level dossier and order history, perform high-dimensional cognitive reviews.
+You MUST analyze the profile and return a exact structured JSON profile representing their AI Customer 360 insights.
+Format the output as a strict JSON object with these exact keys:
+1. "predictedRevenue": (number) Predicted life-cycle revenue contribution from this customer over the next quarter. E.g. 15000.
+2. "expectedGrowth": (number) Expected quarterly percentage growth of user's value (0-100). E.g. 18.
+3. "aiInsight": {
+     "summary": "...", (1-2 sentences of executive summary of customer relationship status and health)
+     "behaviour": "...", (1-2 sentences capturing specific user purchase frequency, preferences, or channel affinity)
+     "riskAnalysis": "...", (1 sentence detailing active churn warning signals or loyalty strengths)
+     "recommendedAction": "...", (Clear, tactical next-step recommendation for marketing/sales team)
+     "upsellOpportunity": "..." (Specific product, bundle, or tier upgrade to pitch to this customer)
+   }
+Your responses must be highly professional, specific to coffee/roastery context if relevant, and avoid fluff. Do not output markdown or code blocks, just the JSON.`;
+
+        const aiResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Analyze this customer dossier:
+Customer Profile:
+Name: ${customer.name}
+Email: ${customer.email}
+Tags / Cohorts: ${customer.tags.join(', ')}
+Total Lifetime Spend: ₹${customer.totalSpent}
+Orders Count: ${customer.orderCount}
+Last Order Date: ${customer.lastOrderDate}
+Customer Since: ${customer.memberSince}
+Health Score: ${calculatedHealth.healthScore}
+Churn Risk: ${calculatedHealth.churnRisk}
+Engagement Score: ${calculatedHealth.engagementScore}
+
+Recent Orders:
+${JSON.stringify(customerOrders)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                predictedRevenue: { type: Type.NUMBER },
+                expectedGrowth: { type: Type.NUMBER },
+                aiInsight: {
+                  type: Type.OBJECT,
+                  properties: {
+                    summary: { type: Type.STRING },
+                    behaviour: { type: Type.STRING },
+                    riskAnalysis: { type: Type.STRING },
+                    recommendedAction: { type: Type.STRING },
+                    upsellOpportunity: { type: Type.STRING }
+                  },
+                  required: ['summary', 'behaviour', 'riskAnalysis', 'recommendedAction', 'upsellOpportunity']
+                }
+              },
+              required: ['predictedRevenue', 'expectedGrowth', 'aiInsight']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(aiResponse.text || '{}');
+        return res.json({
+          customer,
+          company: companyName,
+          status: customerStatus,
+          health: {
+            rfmScore,
+            healthScore: calculatedHealth.healthScore,
+            churnRisk: calculatedHealth.churnRisk,
+            engagementScore: calculatedHealth.engagementScore
+          },
+          revenue: {
+            lifetimeValue: customer.totalSpent,
+            averageOrderValue: avgOrderValue,
+            predictedRevenue: parsed.predictedRevenue || fallback.predictedRevenue,
+            expectedGrowth: parsed.expectedGrowth || fallback.expectedGrowth
+          },
+          aiInsight: {
+            summary: parsed.aiInsight?.summary || fallback.aiInsight.summary,
+            behaviour: parsed.aiInsight?.behaviour || fallback.aiInsight.behaviour,
+            riskAnalysis: parsed.aiInsight?.riskAnalysis || fallback.aiInsight.riskAnalysis,
+            recommendedAction: parsed.aiInsight?.recommendedAction || fallback.aiInsight.recommendedAction,
+            upsellOpportunity: parsed.aiInsight?.upsellOpportunity || fallback.aiInsight.upsellOpportunity
+          },
+          timeline
+        });
+
+      } catch (err) {
+        console.warn('Gemini Customer 360 generation failed, triggering robust fallback...', err);
+      }
+    }
+
+    // Return fallback directly if no AI client, or in case of error
+    return res.json({
+      customer,
+      company: companyName,
+      status: customerStatus,
+      health: {
+        rfmScore,
+        healthScore: calculatedHealth.healthScore,
+        churnRisk: calculatedHealth.churnRisk,
+        engagementScore: calculatedHealth.engagementScore
+      },
+      revenue: {
+        lifetimeValue: customer.totalSpent,
+        averageOrderValue: avgOrderValue,
+        predictedRevenue: fallback.predictedRevenue,
+        expectedGrowth: fallback.expectedGrowth
+      },
+      aiInsight: fallback.aiInsight,
+      timeline
+    });
+
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error compiling Customer 360 data.' });
+  }
+});
+
 
 // 3b. DELETE CUSTOMER
 app.delete('/api/customers/:id', (req, res) => {
@@ -1147,7 +1481,21 @@ app.post(['/api/copilot/generate', '/api/v1/copilot/generate'], async (req, res)
 
   if (ai) {
     try {
-      const sysInstruction = `You are a professional marketing strategist for Mochi CRM. Integrate the user's textual prompt to design a targeted campaign.
+      const sysInstruction = `You are a professional marketing strategist and database analyst for Mochi CRM.
+Integrate the user's textual prompt to design a targeted campaign or perform CRM audits.
+You have access to the real customer database: ${JSON.stringify(customers.map(c => ({ name: c.name, email: c.email, totalSpent: c.totalSpent, orderCount: c.orderCount, lastOrderDate: c.lastOrderDate, tags: c.tags })))}.
+
+Analyse spending, order volume, tags, and dates to detect the core intent, categorizing it as one of:
+- "show_high_value"
+- "show_inactive"
+- "predict_churn"
+- "generate_email"
+- "generate_whatsapp"
+- "generate_sms"
+- "generate_follow_up_email"
+- "show_revenue_forecast"
+(fallback to "generate_campaign" if no match).
+
 Return a strict JSON conforming to this schema:
 {
   "segment": {
@@ -1161,8 +1509,18 @@ Return a strict JSON conforming to this schema:
     "clickRate": number
   },
   "explainabilitySteps": [
-    "A clean list of logical reasoning steps used to build this target segment, such as 'No orders recorded in past 60 days', 'Previous average cart spends exceeding ₹5,000'"
-  ]
+    "A clean list of logical reasoning steps used to build this response"
+  ],
+  "intent": "Detected intent from listing above",
+  "customers": [
+    {
+      "name": "Customer Name",
+      "risk": "High" | "Medium" | "Low",
+      "reason": "Direct reason based on their real metrics",
+      "recommendedAction": "Actionable next step recommendation"
+    }
+  ],
+  "summary": "Short professional summary of the action"
 }
 
 Suggested top-performing channel from historical logs: ${optimized.recommendedChannel} (Open rate: ${optimized.openRate}%, CTR: ${optimized.ctr}%). Try to recommend this channel unless the user prompt demands otherwise.`;
@@ -1197,17 +1555,30 @@ Suggested top-performing channel from historical logs: ${optimized.recommendedCh
               explainabilitySteps: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING }
-              }
+              },
+              intent: { type: Type.STRING },
+              customers: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    risk: { type: Type.STRING },
+                    reason: { type: Type.STRING },
+                    recommendedAction: { type: Type.STRING }
+                  },
+                  required: ['name', 'risk', 'reason', 'recommendedAction']
+                }
+              },
+              summary: { type: Type.STRING }
             },
-            required: ['segment', 'channel', 'message', 'prediction', 'explainabilitySteps']
+            required: ['segment', 'channel', 'message', 'prediction', 'explainabilitySteps', 'intent', 'customers', 'summary']
           }
         }
       });
 
       const parsed = JSON.parse(response.text || '{}');
       
-      // Calculate matched count dynamically from rules matching
-      // Filter some customers deterministically depending on rules or words
       const r = (parsed.segment.rule || '').toLowerCase();
       let matched = [...customers];
       if (r.includes('60') || r.includes('inactive') || r.includes('days')) {
@@ -1221,23 +1592,19 @@ Suggested top-performing channel from historical logs: ${optimized.recommendedCh
 
       return res.json({
         ...parsed,
-        matchedCount: matched.length,
-        explainabilitySteps: parsed.explainabilitySteps || [
-          "Identified through semantic cohort analysis matching the core user intent",
-          "Calculated historical spend indices mapping to targeted discounts",
-          "Optimized delivery medium matched to maximize Click-Through Rates"
-        ]
+        matchedCount: matched.length
       });
 
     } catch (e) {
-      console.error('[Copilot Engine] LLM failed, fallback trigger:', e);
+      console.error('[Copilot Engine] LLM failed, using advanced local fallback:', e);
     }
   }
 
   // Fallback trigger in case of API Key absence or rate limits
   const p = userPrompt.toLowerCase();
+  let intent = 'generate_campaign';
   let channel: 'whatsapp' | 'email' | 'sms' | 'rcs' = 'whatsapp';
-  let rule = 'customer.totalSpent > 10000';
+  let rule = 'customer.totalSpent > 5000';
   let audienceType = 'VIP Coffee Lovers';
   let message = 'Hey {name}! ☕ As one of our top patrons, here is an exclusive 15% off coupon: COFFEEVIP15. Validate yours here: xeno.coffee/vip';
   let openRate = 92;
@@ -1247,43 +1614,120 @@ Suggested top-performing channel from historical logs: ${optimized.recommendedCh
     "Highest active engagement loops in recent quarters",
     "Preference detected for premium single-origin roasts"
   ];
+  let clientAudit: any[] = [];
+  let summary = 'Copilot processed requested workflow.';
 
-  if (p.includes('churn') || p.includes('inactive') || p.includes('60') || p.includes('90')) {
-    rule = 'diffDays > 60';
-    audienceType = 'At-Risk Lapsed Shoppers';
-    channel = 'email';
-    message = 'Hi {name}, we miss you! ☕ Here is flat 20% off your next order with code MISSYOU20. Let\'s brew together: xeno.coffee/comeback';
-    openRate = 26;
-    clickRate = 4.2;
-    explainability = [
-      "No checkout actions recorded in past 60 days",
-      "Prior average cart size exceeded ₹1,200",
-      "Email communication represents less intrusive retargeting"
-    ];
-  } else if (p.includes('new') || p.includes('fresh')) {
-    rule = 'customer.orderCount <= 1';
-    audienceType = 'First-Time Leads';
+  if (p.includes('high value') || p.includes('vip') || p.includes('big spender')) {
+    intent = 'show_high_value';
+    const highVal = customers.filter(c => c.totalSpent > 9000);
+    clientAudit = highVal.map(c => ({
+      name: c.name,
+      risk: 'Low',
+      reason: `Healthy customer with ₹${c.totalSpent.toLocaleString()} lifetime spend over ${c.orderCount} orders.`,
+      recommendedAction: 'Send exclusive early access invites to premium seasonal single-origins.'
+    }));
+    rule = 'customer.totalSpent > 9000';
+    audienceType = 'High-Value VIPs';
     channel = 'whatsapp';
-    message = 'Hey {name}! 🎉 Thanks for choosing Mochi! Here is a special 10% welcome coupon for your second order: WELCOME10. Shop: mochi.coffee/welcome';
-    openRate = 95;
-    clickRate = 18;
-    explainability = [
-      "Registered member with 1 or fewer organic purchases",
-      "High immediate activation rate within first 14 days",
-      "Dynamic push via WhatsApp delivers highest conversion rate"
-    ];
+    message = 'Greetings {name}! ⭐ As a valued Mochi VIP, enjoy early release slots for our micro-lot Panama Geisha beans: mochi.coffee/reserve';
+    summary = `Detected ${highVal.length} high value premium client profiles with Lifetime Value exceeding ₹9,000.`;
+  } else if (p.includes('inactive') || p.includes('lapsed') || p.includes('dormant') || p.includes('no purchase')) {
+    intent = 'show_inactive';
+    const inactives = customers.filter(c => c.tags.includes('inactive') || c.tags.includes('at-risk'));
+    clientAudit = inactives.map(c => ({
+      name: c.name,
+      risk: 'High',
+      reason: `No purchase recorded since ${c.lastOrderDate || '90 days'}. Tagged as inactive.`,
+      recommendedAction: 'Engage with aggressive 25% discount re-engagement campaign.'
+    }));
+    rule = 'customer.tags.contains("inactive")';
+    audienceType = 'Lapsed Inactive Patrons';
+    channel = 'email';
+    message = 'Hi {name}, we miss you at Mochi CRM! ☕ Brew again with a fresh 20% discount coupon code: COMEBACK20. Claim: mochi.crm/welcomeback';
+    summary = `Identified ${inactives.length} lapsed customer profiles with no recent order activity in past 60-90 days.`;
+  } else if (p.includes('churn') || p.includes('predict churn') || p.includes('risk')) {
+    intent = 'predict_churn';
+    const atRisk = customers.filter(c => c.tags.includes('at-risk') || c.totalSpent < 3000);
+    clientAudit = atRisk.slice(0, 4).map(c => ({
+      name: c.name,
+      risk: c.tags.includes('at-risk') ? 'High' : 'Medium',
+      reason: `Reduced purchase frequency (${c.orderCount} orders total) and declining engagement indices.`,
+      recommendedAction: 'Send rapid satisfaction surveys via WhatsApp followed by immediate 15% discount.'
+    }));
+    rule = 'customer.churnRisk == "High"';
+    audienceType = 'High Churn Risk Cohorts';
+    channel = 'sms';
+    message = 'Hey {name}, your feedback matters! Take our 1-min quick survey & unlock safe free coffee perks: mochi.coffee/survey';
+    summary = `Analytical churn model detects ${atRisk.length} active customer profiles showing high/medium risk criteria.`;
+  } else if (p.includes('whatsapp')) {
+    intent = 'generate_whatsapp';
+    rule = 'preferredChannel == "whatsapp"';
+    audienceType = 'WhatsApp-Preferred Shoppers';
+    channel = 'whatsapp';
+    message = 'Hey {name}! ⚡ Quick update: Mochi Espresso Stout returns tonight! Claim a free mug with code STOUTMUG today: mochi.coffee/stout';
+    clientAudit = customers.filter(c => c.phone).slice(0, 3).map(c => ({
+      name: c.name,
+      risk: 'Low',
+      reason: `Highly responsive on mobile channel (${c.phone}).`,
+      recommendedAction: 'Broadcast conversational checkout template.'
+    }));
+    summary = 'Synthesized conversational WhatsApp broadcast for high mobile-intent subscribers.';
+  } else if (p.includes('email') && p.includes('follow')) {
+    intent = 'generate_follow_up_email';
+    rule = 'campaign.opened == true && campaign.clicked == false';
+    audienceType = 'Email Engaged Non-Convertors';
+    channel = 'email';
+    message = 'Subject: Quick question about your Mochi order, {name}...\n\nHi {name},\nWe noticed you checked out our micro-lots but didn\'t claim your slots. Need help picking a roast? Reply directly or claim 10% off: mochi.coffee/assist';
+    clientAudit = customers.slice(0, 2).map(c => ({
+      name: c.name,
+      risk: 'Medium',
+      reason: 'Lapsed cart conversion after launching the principal campaign.',
+      recommendedAction: 'Deliver gentle follow-up sequence containing conversational queries.'
+    }));
+    summary = 'Generated conversational multi-stage email follow-up sequence with secondary activation links.';
+  } else if (p.includes('email')) {
+    intent = 'generate_email';
+    rule = 'preferredChannel == "email"';
+    audienceType = 'Newsletter Subscribers';
+    channel = 'email';
+    message = 'Subject: Your Exclusive Weekend Brew Report from Mochi ☕\n\nDear {name},\nOur Master Roaster just pulled a limited release of Ethiopian Yirgacheffe. Buy one, get one 50% off: mochi.coffee/weekend';
+    clientAudit = customers.filter(c => c.email).slice(0, 3).map(c => ({
+      name: c.name,
+      risk: 'Low',
+      reason: `Email delivery opt-in confirmed (${c.email}).`,
+      recommendedAction: 'Enroll into bi-weekly newsletters.'
+    }));
+    summary = 'Synthesized premium HTML-compatible marketing email layout focusing on artisanal coffee drops.';
+  } else if (p.includes('sms')) {
+    intent = 'generate_sms';
+    rule = 'customer.orderCount == 1';
+    audienceType = 'Single-Purchase Converts';
+    channel = 'sms';
+    message = 'Mochi Alert: Hey {name}! Get double stars on all coffee orders this Thursday! Claim extra stars: mochi.coffee/loyalty';
+    clientAudit = customers.slice(0, 3).map(c => ({
+      name: c.name,
+      risk: 'Low',
+      reason: 'Ideal SMS-responsive transactional user profiles.',
+      recommendedAction: 'Automate SMS triggers post point-of-sale checkouts.'
+    }));
+    summary = 'Drafted short high-conversion SMS broadcast for 160-character cellular deliverability.';
+  } else if (p.includes('forecast') || p.includes('revenue') || p.includes('expect')) {
+    intent = 'show_revenue_forecast';
+    rule = 'all';
+    audienceType = 'Total Addressable Market';
+    channel = 'email';
+    message = 'Hey {name}! ☕ Double up your balances at Mochi CRM & get flat ₹500 cashback credit: mochi.coffee/recharge';
+    clientAudit = customers.slice(0, 4).map(c => ({
+      name: c.name,
+      risk: 'Low',
+      reason: `Steady past spend of ₹${c.totalSpent.toLocaleString()}.`,
+      recommendedAction: 'Predicting ₹${(c.totalSpent * 1.15).toFixed(0)} spent within next fiscal quarter.'
+    }));
+    const totalCurrent = customers.reduce((sum, c) => sum + c.totalSpent, 0);
+    summary = `Statistical models project positive growth. Current CRM aggregate is ₹${totalCurrent.toLocaleString()}. Expected Q3 lift is +14.2% (₹${(totalCurrent * 1.142).toFixed(0)} total forecast).`;
   }
 
-  const r = rule.toLowerCase();
-  let matched = [...customers];
-  if (r.includes('60') || r.includes('inactive')) {
-    matched = customers.filter(c => c.tags.includes('inactive') || c.tags.includes('at-risk'));
-  } else if (r.includes('10000') || r.includes('vip')) {
-    matched = customers.filter(c => c.totalSpent > 10000);
-  } else {
-    matched = customers.slice(0, 6);
-  }
-  if (matched.length === 0) matched = customers.slice(0, 5);
+  const matched = customers.slice(0, clientAudit.length > 0 ? clientAudit.length : 4);
 
   res.json({
     segment: { rule, audienceType },
@@ -1291,7 +1735,10 @@ Suggested top-performing channel from historical logs: ${optimized.recommendedCh
     message,
     prediction: { openRate, clickRate },
     matchedCount: matched.length,
-    explainabilitySteps: explainability
+    explainabilitySteps: explainability,
+    intent,
+    customers: clientAudit,
+    summary
   });
 });
 

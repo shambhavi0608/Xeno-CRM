@@ -47,10 +47,9 @@ import {
   fetchRecentActivity, 
   fetchAIInsights,
   fetchDailyInsights,
-  DailyInsightsResponse,
   createCampaign
 } from '../lib/api.js';
-import { Campaign, AnalyticsOverview, RecentActivityItem, AIInsightItem } from '../types/index.js';
+import { Campaign, AnalyticsOverview, RecentActivityItem, AIInsightItem, DailyInsightsResponse } from '../types/index.js';
 import { CountUp } from '../components/ui/CountUp.js';
 import { ChannelBadge } from '../components/ui/ChannelBadge.js';
 import { Badge } from '../components/ui/Badge.js';
