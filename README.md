@@ -15,20 +15,47 @@
 
 1. [Project Overview](#-project-overview)
 2. [Unique Structural Highlights](#-unique-structural-highlights)
-3. [Core Features](#-core-features)
-4. [System Architecture Diagram](#-system-architecture-diagram)
-5. [Data Models & Schema Design](#-data-models-schema-design)
-6. [API Endpoints Reference](#-api-endpoints-reference)
-7. [AI Integration & Schema Models Deep-Dive](#-ai-integration-schema-models-deep-dive)
-8. [Asynchronous Campaign Delivery Simulator](#-asynchronous-campaign-delivery-simulator)
-9. [Geospatial Density Mapping (D3)](#-geospatial-density-mapping-d3)
-10. [Revolving Compliance & Audit Ledger](#-revolving-compliance--audit-ledger)
-11. [Getting Started (Local Onboarding)](#-getting-started-local-onboarding)
-12. [Environment Configuration Reference](#-environment-configuration-reference)
-13. [Key Engineering and Architectural Decisions](#-key-engineering-and-architectural-decisions)
-14. [Scalability Strategy (10M+ Users Architecture)](#-scalability-strategy-10m-users-architecture)
-15. [Security Blueprint (Xeno Shield compliance)](#-security-blueprint-xeno-shield-compliance)
+3. [Demo Video](#-demo-video)
+4. [Core Features](#-core-features)
+5. [System Architecture Diagram](#-system-architecture-diagram)
+6. [Data Models & Schema Design](#-data-models-schema-design)
+7. [API Endpoints Reference](#-api-endpoints-reference)
+8. [AI Integration & Schema Models Deep-Dive](#-ai-integration-schema-models-deep-dive)
+9. [Asynchronous Campaign Delivery Simulator](#-asynchronous-campaign-delivery-simulator)
+10. [Geospatial Density Mapping (D3)](#-geospatial-density-mapping-d3)
+11. [Revolving Compliance & Audit Ledger](#-revolving-compliance--audit-ledger)
+12. [Getting Started (Local Onboarding)](#-getting-started-local-onboarding)
+13. [Environment Configuration Reference](#-environment-configuration-reference)
+14. [Key Engineering and Architectural Decisions](#-key-engineering-and-architectural-decisions)
+15. [Scalability Strategy (10M+ Users Architecture)](#-scalability-strategy-10m-users-architecture)
+16. [Security Blueprint (Xeno Shield compliance)](#-security-blueprint-xeno-shield-compliance)
+---
 
+## 🎥 Demo Video
+
+Experience **Mochi CRM** in action through a complete walkthrough showcasing AI-powered customer segmentation, Gemini campaign generation, analytics dashboards, geospatial insights, and real-time campaign simulation.
+
+<p align="center">
+
+[![Watch Full Demo](https://img.shields.io/badge/▶️_Watch_Mochi_CRM_Demo-000000?style=for-the-badge)](https://github.com/shambhavi0608/Xeno-CRM/blob/main/Mochi%20CRM%20%E2%80%94%20AI-Native%20Mini%20CRM%20-%20Google%20Chrome%202026-06-15%2007-16-56.mp4)
+
+</p>
+
+### 🚀 Demo Highlights
+
+- 🤖 AI Customer Segmentation using Google Gemini
+- 📣 Multi-Channel Campaign Builder
+- ✍️ AI Campaign Copy Generation
+- 📊 Real-time Analytics Dashboard
+- 🗺 Interactive D3 Geospatial Density Map
+- 🛡 Compliance & Audit Ledger
+- ⚡ Asynchronous Campaign Simulation
+
+> Click the **"Watch Mochi CRM Demo"** button above to view the complete project walkthrough.
+
+---
+
+## 📖 Project Overview
 ---
 
 ## 📖 Project Overview
