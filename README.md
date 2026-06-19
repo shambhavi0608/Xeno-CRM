@@ -56,9 +56,6 @@ Experience **Mochi CRM** in action through a complete walkthrough showcasing AI-
 ---
 
 ## 📖 Project Overview
----
-
-## 📖 Project Overview
 
 **Mochi CRM** is a state-of-the-art, fully responsive, full-stack, AI-native Customer Relationship Management and marketing automation system built from scratch to meet the demanding parameters of the Xeno recruitment review. 
 
