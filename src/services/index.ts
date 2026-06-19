@@ -4,3 +4,8 @@ export { activityService } from './activityService.js';
 export { aiService } from './aiService.js';
 export { authService } from './authService.js';
 export { customer360Service } from './customer360Service.js';
+export { aiCustomerService } from './aiCustomerService.js';
+export { revenueForecastService } from './revenueForecastService.js';
+export { churnService } from './churnService.js';
+export { aiSalesAgentService } from './aiSalesAgentService.js';
+export { workflowService } from './workflowService.js';

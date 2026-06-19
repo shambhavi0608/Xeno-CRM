@@ -218,6 +218,199 @@
         "status",
         "timestamp"
       ]
+    },
+    "CustomerAIProfile": {
+      "title": "CustomerAIProfile",
+      "description": "Customer AI Brain Profile",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "healthScore": { "type": "number" },
+        "rfmScore": { "type": "string" },
+        "churnRisk": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "engagementScore": { "type": "number" },
+        "sentiment": { "type": "string" },
+        "preferredChannel": { "type": "string" },
+        "lifetimeValue": { "type": "number" },
+        "predictedRevenue": { "type": "number" },
+        "nextPurchasePrediction": { "type": "string" },
+        "aiSummary": { "type": "string" },
+        "recommendedActions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": [
+        "customerId",
+        "healthScore",
+        "rfmScore",
+        "churnRisk",
+        "engagementScore",
+        "sentiment",
+        "preferredChannel",
+        "lifetimeValue",
+        "predictedRevenue",
+        "nextPurchasePrediction",
+        "aiSummary",
+        "recommendedActions"
+      ]
+    },
+    "RevenueForecast": {
+      "title": "RevenueForecast",
+      "description": "Customer AI Revenue Forecast",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "month": { "type": "string" },
+        "predictedRevenue": { "type": "number" },
+        "growthPercentage": { "type": "number" },
+        "confidence": { "type": "number" },
+        "reason": { "type": "string" },
+        "generatedAt": { "type": "string" }
+      },
+      "required": [
+        "customerId",
+        "month",
+        "predictedRevenue",
+        "growthPercentage",
+        "confidence",
+        "reason",
+        "generatedAt"
+      ]
+    },
+    "CustomerChurnPrediction": {
+      "title": "CustomerChurnPrediction",
+      "description": "Customer AI Churn Prediction Engine Output",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "risk": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"] },
+        "score": { "type": "number" },
+        "reason": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommendedActions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "predictedAt": { "type": "string" }
+      },
+      "required": [
+        "customerId",
+        "risk",
+        "score",
+        "reason",
+        "recommendedActions",
+        "predictedAt"
+      ]
+    },
+    "WorkflowAutomation": {
+      "title": "WorkflowAutomation",
+      "description": "AI Autonomous Workflow Automation record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "trigger": { "type": "string" },
+        "condition": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "paused"] },
+        "lastExecuted": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "name",
+        "trigger",
+        "condition",
+        "action",
+        "status",
+        "createdAt"
+      ]
+    },
+    "CustomerMemory": {
+      "title": "CustomerMemory",
+      "description": "Customer AI Memory and dynamic facts catalog",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "facts": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "preferences": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "communicationStyle": { "type": "string" },
+        "favoriteProducts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "purchaseHabits": { "type": "string" },
+        "importantEvents": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "summary": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": [
+        "customerId",
+        "facts",
+        "preferences",
+        "communicationStyle",
+        "favoriteProducts",
+        "purchaseHabits",
+        "importantEvents",
+        "summary",
+        "lastUpdated"
+      ]
+    },
+    "CustomerGraph": {
+      "title": "CustomerGraph",
+      "description": "Customer semantic knowledge graph nodes and edges map",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "edges": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "lastBuilt": { "type": "string" }
+      },
+      "required": [
+        "customerId",
+        "nodes",
+        "edges",
+        "lastBuilt"
+      ]
+    },
+    "AgentLog": {
+      "title": "AgentLog",
+      "description": "Multi-Agent system execution logging",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "agentName": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string" },
+        "findings": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "agentName",
+        "action",
+        "status",
+        "findings",
+        "timestamp"
+      ]
     }
   },
   "firestore": {
@@ -240,6 +433,34 @@
     "/users/{userId}/events/{eventId}": {
       "schema": "CommunicationEvent",
       "description": "Log events for tracked messaging"
+    },
+    "/users/{userId}/customer_ai_profiles/{customerId}": {
+      "schema": "CustomerAIProfile",
+      "description": "AI Customer Brain Profiles"
+    },
+    "/users/{userId}/revenue_forecasts/{forecastId}": {
+      "schema": "RevenueForecast",
+      "description": "Revenue prediction datasets"
+    },
+    "/users/{userId}/customer_churn_predictions/{predictionId}": {
+      "schema": "CustomerChurnPrediction",
+      "description": "Customer AI Churn Predictions"
+    },
+    "/users/{userId}/workflow_automations/{workflowId}": {
+      "schema": "WorkflowAutomation",
+      "description": "AI Autonomous Workflow Automation records"
+    },
+    "/users/{userId}/customer_memory/{customerId}": {
+      "schema": "CustomerMemory",
+      "description": "Customer AI Memory logs"
+    },
+    "/users/{userId}/customer_graph/{customerId}": {
+      "schema": "CustomerGraph",
+      "description": "Customer Knowledge Graph node maps"
+    },
+    "/users/{userId}/ai_agents_logs/{logId}": {
+      "schema": "AgentLog",
+      "description": "Autonomous AI Multi-Agent execution logger"
     }
   }
 }

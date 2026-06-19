@@ -96,3 +96,19 @@ export interface Customer360Data {
   timeline: Customer360TimelineItem[];
 }
 
+export interface CustomerAIProfile {
+  customerId: string;
+  healthScore: number;
+  rfmScore: string;
+  churnRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  engagementScore: number;
+  sentiment: string;
+  preferredChannel: string;
+  lifetimeValue: number;
+  predictedRevenue: number;
+  nextPurchasePrediction: string;
+  aiSummary: string;
+  recommendedActions: string[];
+}
+
+

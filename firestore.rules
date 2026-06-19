@@ -109,6 +109,107 @@ service cloud.firestore {
              data.timestamp is string;
     }
 
+    function isValidCustomerAIProfile(data) {
+      return data.keys().hasAll([
+        'customerId', 'healthScore', 'rfmScore', 'churnRisk', 'engagementScore',
+        'sentiment', 'preferredChannel', 'lifetimeValue', 'predictedRevenue',
+        'nextPurchasePrediction', 'aiSummary', 'recommendedActions'
+      ]) &&
+             data.keys().size() == 12 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.healthScore is number && data.healthScore >= 0 && data.healthScore <= 100 &&
+             data.rfmScore is string && data.rfmScore.size() <= 16 &&
+             data.churnRisk is string && data.churnRisk in ['LOW', 'MEDIUM', 'HIGH'] &&
+             data.engagementScore is number && data.engagementScore >= 0 && data.engagementScore <= 100 &&
+             data.sentiment is string && data.sentiment.size() <= 64 &&
+             data.preferredChannel is string && data.preferredChannel.size() <= 64 &&
+             data.lifetimeValue is number && data.lifetimeValue >= 0 &&
+             data.predictedRevenue is number && data.predictedRevenue >= 0 &&
+             data.nextPurchasePrediction is string && data.nextPurchasePrediction.size() <= 256 &&
+             data.aiSummary is string && data.aiSummary.size() <= 2000 &&
+             data.recommendedActions is list && data.recommendedActions.size() <= 20 &&
+             (data.recommendedActions.size() == 0 || data.recommendedActions[0] is string);
+    }
+
+    function isValidRevenueForecast(data) {
+      return data.keys().hasAll([
+        'customerId', 'month', 'predictedRevenue', 'growthPercentage', 'confidence', 'reason', 'generatedAt'
+      ]) &&
+             data.keys().size() == 7 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.month is string && data.month.size() <= 32 &&
+             data.predictedRevenue is number &&
+             data.growthPercentage is number &&
+             data.confidence is number && data.confidence >= 0 && data.confidence <= 100 &&
+             data.reason is string && data.reason.size() <= 2000 &&
+             (data.generatedAt is timestamp || data.generatedAt is string);
+    }
+
+    function isValidCustomerChurnPrediction(data) {
+      return data.keys().hasAll([
+        'customerId', 'risk', 'score', 'reason', 'recommendedActions', 'predictedAt'
+      ]) &&
+             data.keys().size() == 6 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.risk is string && data.risk in ['LOW', 'MEDIUM', 'HIGH'] &&
+             data.score is number && data.score >= 0 && data.score <= 100 &&
+             data.reason is list && data.reason.size() <= 20 &&
+             (data.reason.size() == 0 || data.reason[0] is string) &&
+             data.recommendedActions is list && data.recommendedActions.size() <= 20 &&
+             (data.recommendedActions.size() == 0 || data.recommendedActions[0] is string) &&
+             (data.predictedAt is timestamp || data.predictedAt is string);
+    }
+
+    function isValidWorkflowAutomation(data) {
+      return data.keys().hasAll(['id', 'name', 'trigger', 'condition', 'action', 'status', 'createdAt']) &&
+             data.keys().size() <= 8 &&
+             data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.trigger is string && data.trigger.size() <= 128 &&
+             data.condition is string && data.condition.size() <= 256 &&
+             data.action is string && data.action.size() <= 128 &&
+             data.status is string && data.status in ['active', 'paused'] &&
+             (data.createdAt is timestamp || data.createdAt is string) &&
+             (!data.keys().hasAny(['lastExecuted']) || data.lastExecuted is timestamp || data.lastExecuted is string);
+    }
+
+    function isValidCustomerMemory(data) {
+      return data.keys().hasAll([
+        'customerId', 'facts', 'preferences', 'communicationStyle', 'favoriteProducts', 'purchaseHabits', 'importantEvents', 'summary', 'lastUpdated'
+      ]) &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.facts is list &&
+             data.preferences is list &&
+             data.communicationStyle is string &&
+             data.favoriteProducts is list &&
+             data.purchaseHabits is string &&
+             data.importantEvents is list &&
+             data.summary is string &&
+             data.lastUpdated is string;
+    }
+
+    function isValidCustomerGraph(data) {
+      return data.keys().hasAll([
+        'customerId', 'nodes', 'edges', 'lastBuilt'
+      ]) &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.nodes is list &&
+             data.edges is list &&
+             data.lastBuilt is string;
+    }
+
+    function isValidAgentLog(data) {
+      return data.keys().hasAll([
+        'id', 'agentName', 'action', 'status', 'findings', 'timestamp'
+      ]) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.agentName is string &&
+             data.action is string &&
+             data.status is string &&
+             data.findings is string &&
+             data.timestamp is string;
+    }
+
     // Flat path matching rules to ensure clarity and avoid context inheritance issues
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -146,6 +247,62 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isVerifiedUser() && isValidId(eventId) && isValidEvent(incoming());
       allow update: if isOwner(userId) && isVerifiedUser() && isValidId(eventId) && isValidEvent(incoming());
       allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(eventId);
+    }
+
+    match /users/{userId}/customer_ai_profiles/{customerId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(customerId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerAIProfile(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerAIProfile(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(customerId);
+    }
+
+    match /users/{userId}/revenue_forecasts/{forecastId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(forecastId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(forecastId) && isValidRevenueForecast(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(forecastId) && isValidRevenueForecast(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(forecastId);
+    }
+
+    match /users/{userId}/customer_churn_predictions/{predictionId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(predictionId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(predictionId) && isValidCustomerChurnPrediction(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(predictionId) && isValidCustomerChurnPrediction(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(predictionId);
+    }
+
+    match /users/{userId}/workflow_automations/{workflowId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(workflowId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(workflowId) && isValidWorkflowAutomation(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(workflowId) && isValidWorkflowAutomation(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(workflowId);
+    }
+
+    match /users/{userId}/customer_memory/{customerId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(customerId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerMemory(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerMemory(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(customerId);
+    }
+
+    match /users/{userId}/customer_graph/{customerId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(customerId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerGraph(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(customerId) && isValidCustomerGraph(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(customerId);
+    }
+
+    match /users/{userId}/ai_agents_logs/{logId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(logId);
+      allow create: if isOwner(userId) && isVerifiedUser() && isValidId(logId) && isValidAgentLog(incoming());
+      allow update: if isOwner(userId) && isVerifiedUser() && isValidId(logId) && isValidAgentLog(incoming());
+      allow delete: if isOwner(userId) && isVerifiedUser() && isValidId(logId);
     }
   }
 }

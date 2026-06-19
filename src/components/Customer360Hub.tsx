@@ -28,7 +28,8 @@ import {
   YAxis, 
   Tooltip 
 } from 'recharts';
-import { Customer360Data } from '../types/index.js';
+import { Customer360Data, CustomerChurnPrediction } from '../types/index.js';
+import { churnService } from '../services/churnService.js';
 
 interface Customer360HubProps {
   data: Customer360Data;
@@ -36,6 +37,37 @@ interface Customer360HubProps {
 
 export function Customer360Hub({ data }: Customer360HubProps) {
   const { customer, company, status, health, revenue, aiInsight, timeline } = data;
+
+  const [churnPrediction, setChurnPrediction] = React.useState<CustomerChurnPrediction | null>(null);
+  const [isChurnLoading, setIsChurnLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (customer?.id) {
+      setIsChurnLoading(true);
+      churnService.getChurnPrediction(customer.id)
+        .then(res => {
+          setChurnPrediction(res);
+          setIsChurnLoading(false);
+        })
+        .catch(err => {
+          console.error('[Customer360Hub] Failed to load churn prediction:', err);
+          setIsChurnLoading(false);
+        });
+    }
+  }, [customer?.id]);
+
+  const handleRegenerateChurn = async () => {
+    if (!customer?.id) return;
+    setIsChurnLoading(true);
+    try {
+      const updated = await churnService.predictChurn(customer.id);
+      setChurnPrediction(updated);
+    } catch (err) {
+      console.error('[Customer360Hub] Failed to regenerate churn predictions:', err);
+    } finally {
+      setIsChurnLoading(false);
+    }
+  };
 
   // Prepare chart data chronologically from customer's actual orders (or derive if none)
   const orderEvents = timeline
@@ -432,6 +464,120 @@ export function Customer360Hub({ data }: Customer360HubProps) {
               </div>
             </div>
           </div>
+        </motion.div>
+
+        {/* Churn Prediction Card */}
+        <motion.div 
+          id="c360_churn_prediction_card"
+          variants={cardVariants}
+          className="relative bg-[#0d0f12] border border-white/5 rounded-2xl p-6 shadow-2xl space-y-4"
+        >
+          <div className="absolute top-1 right-2 pointer-events-none">
+            <ShieldAlert className="w-5 h-5 text-red-500/10" />
+          </div>
+
+          <div className="flex justify-between items-center pb-2">
+            <div className="p-1 px-2 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold font-mono tracking-wider uppercase">AI Churn Risk Engine</span>
+            </div>
+            
+            <button
+              id="c360_churn_recalculate"
+              onClick={handleRegenerateChurn}
+              disabled={isChurnLoading}
+              className="text-[10px] font-bold font-mono text-red-400 border border-red-500/20 px-2.5 py-1 rounded bg-red-500/5 hover:bg-red-500/10 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <Sparkles className="w-3 h-3 animate-spin" style={{ animationPlayState: isChurnLoading ? 'running' : 'paused' }} />
+              <span>{isChurnLoading ? 'RECALCULATING...' : 'REGENERATE'}</span>
+            </button>
+          </div>
+
+          {isChurnLoading && !churnPrediction ? (
+            <div className="space-y-3 py-4 animate-pulse">
+              <div className="h-4 bg-white/5 rounded w-1/3" />
+              <div className="h-3 bg-white/5 rounded w-3/4" />
+              <div className="h-3 bg-white/5 rounded w-5/6" />
+            </div>
+          ) : churnPrediction ? (
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+              {/* Radial Risk Meter */}
+              <div className="sm:col-span-4 flex flex-col items-center justify-center p-3 sm:border-r border-white/5 pr-0 sm:pr-4">
+                <div className="relative w-20 h-20 flex items-center justify-center">
+                  <svg className="absolute inset-0 w-full h-full rotate-270" viewBox="0 0 36 36">
+                    <path
+                      className="text-stone-900"
+                      strokeWidth="3.2"
+                      stroke="currentColor"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      className={
+                        churnPrediction.risk === 'HIGH' 
+                          ? 'text-red-500' 
+                          : churnPrediction.risk === 'MEDIUM' 
+                            ? 'text-amber-500' 
+                            : 'text-emerald-500'
+                      }
+                      strokeWidth="3.2"
+                      strokeDasharray={`${churnPrediction.score}, 100`}
+                      strokeLinecap="round"
+                      stroke="currentColor"
+                      fill="none"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <div className="text-center z-10">
+                    <span className="block text-xl font-extrabold text-white font-mono">{Math.round(churnPrediction.score)}%</span>
+                    <span className="text-[7.5px] uppercase tracking-wider text-stone-400 font-bold block leading-none">Risk Score</span>
+                  </div>
+                </div>
+                
+                <span className={`text-[9px] font-bold font-mono tracking-wider uppercase mt-3 px-2 py-0.5 rounded border inline-block ${
+                  churnPrediction.risk === 'HIGH'
+                    ? 'text-red-400 bg-red-400/10 border-red-400/20'
+                    : churnPrediction.risk === 'MEDIUM'
+                      ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+                      : 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
+                }`}>
+                  {churnPrediction.risk} RISK
+                </span>
+              </div>
+
+              {/* Insights and Win-back suggestions */}
+              <div className="sm:col-span-8 space-y-4 text-left">
+                {/* Causes list */}
+                <div className="space-y-1">
+                  <h5 className="text-[10px] font-bold text-amber-300 font-mono flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> BEHAVIORAL ATTRITION TRIGGERS
+                  </h5>
+                  <ul className="list-disc pl-4 space-y-1 font-sans">
+                    {churnPrediction.reason.map((r, i) => (
+                      <li key={i} className="text-xs text-stone-300 leading-normal">{r}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Counter Actions list */}
+                <div className="space-y-1 mb-1">
+                  <h5 className="text-[10px] font-bold text-emerald-400 font-mono flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-450" /> RECOMMENDED RETENTION ACTIONS
+                  </h5>
+                  <div className="space-y-1.5 pt-1">
+                    {churnPrediction.recommendedActions.map((act, i) => (
+                      <div key={i} className="flex gap-2 items-start text-xs text-stone-300 bg-white/[0.015] border border-white/5 rounded-lg p-2.5 font-sans">
+                        <span className="font-mono text-emerald-450 font-bold">0{i+1}.</span>
+                        <span className="leading-snug">{act}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-stone-400 font-sans">No predictions found.</p>
+          )}
         </motion.div>
 
         {/* 5. ACTIVITY TIMELINE */}

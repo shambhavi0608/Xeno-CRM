@@ -19,6 +19,11 @@ import {
 } from './src/server/db.js';
 import { Customer, Order, Campaign, CommunicationEvent, AnalyticsOverview, calculateCustomerHealth } from './src/types/index.js';
 import { optimizeChannel } from './src/server/channelOptimizer.js';
+import workflowRouter from './src/api/workflowRoutes.js';
+import agentRouter from './src/api/agentRoutes.js';
+import memoryRouter from './src/api/memoryRoutes.js';
+import graphRouter from './src/api/graphRoutes.js';
+import simulationRouter from './src/api/simulationRoutes.js';
 
 const app = express();
 
@@ -74,14 +79,31 @@ app.use([
   '/api/segment/suggest',
   '/api/campaigns/generate-copy',
   '/api/campaigns/predict',
-  '/api/analytics/insights'
+  '/api/analytics/insights',
+  '/api/churn/generate/:customerId',
+  '/api/ai/sales/find-buyers',
+  '/api/ai/sales/strategy',
+  '/api/ai/sales/followup',
+  '/api/workflows/:id/execute',
+  '/api/agents/sales',
+  '/api/agents/marketing',
+  '/api/agents/customer-success',
+  '/api/agents/revenue',
+  '/api/agents/analytics',
+  '/api/agents/run-all',
+  '/api/memory/generate/:customerId',
+  '/api/graph/similar/:customerId',
+  '/api/graph/recommendations/:customerId',
+  '/api/graph/recommend-campaigns/:customerId',
+  '/api/graph/predict-purchase/:customerId',
+  '/api/simulation/predict'
 ], copilotLimiter);
 
 const PORT = 3000;
 
 // Lazy initialization of Gemini developer SDK
 let aiClient: GoogleGenAI | null = null;
-function getAi(): GoogleGenAI | null {
+export function getAi(): GoogleGenAI | null {
   const key = process.env.GEMINI_API_KEY;
   if (!key || key === 'MY_GEMINI_API_KEY') {
     return null;
@@ -100,7 +122,7 @@ function getAi(): GoogleGenAI | null {
 }
 
 // Robust fallback & retry runner over Google GenAI API
-async function generateContentWithRetry(params: {
+export async function generateContentWithRetry(params: {
   contents: any;
   config: any;
   preferredModel?: string;
@@ -512,6 +534,1367 @@ ${JSON.stringify(customerOrders)}`,
   }
 });
 
+// -------------------------------------------------------------
+// REVENUE FORECAST ENGINE FILE PERSISTENCE & HELPERS
+// -------------------------------------------------------------
+const REVENUE_FORECASTS_FILE = path.join(process.cwd(), 'revenue_forecasts.json');
+
+function getLocalForecasts(): any[] {
+  try {
+    if (fs.existsSync(REVENUE_FORECASTS_FILE)) {
+      return JSON.parse(fs.readFileSync(REVENUE_FORECASTS_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('[Revenue Forecasts Server] Error loading local forecasts:', e);
+  }
+  return [];
+}
+
+function writeLocalForecasts(forecasts: any[]): void {
+  try {
+    fs.writeFileSync(REVENUE_FORECASTS_FILE, JSON.stringify(forecasts, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Revenue Forecasts Server] Error saving local forecasts:', e);
+  }
+}
+
+function calculateFallbackForecast(customer: any, orders: any[], events: any[]): any {
+  try {
+    const avgOrderValue = customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount) : 1000;
+    
+    // Calculate a baseline prediction for next month
+    let predictedRevenue = avgOrderValue;
+    let growthPercentage = 5.0; // default 5%
+    let confidence = 85;
+    let reason = `${customer.name} demonstrates a stable average order value of ₹${Math.round(avgOrderValue)} with steady purchase habits.`;
+
+    // Dynamic adjustments based on tags and activity
+    if (customer.tags.includes('inactive')) {
+      predictedRevenue = 0;
+      growthPercentage = -100.0;
+      confidence = 60;
+      reason = `Customer has lapsed. Purchase gaps indicate zero organic transactional potential without incentive intervention.`;
+    } else if (customer.tags.includes('at-risk')) {
+      predictedRevenue = Math.round(avgOrderValue * 0.3);
+      growthPercentage = -40.0;
+      confidence = 70;
+      reason = `Dormancy warning: Decline in interaction speed signals active churn risk. Estimated Next month demand is compressed.`;
+    } else if (customer.tags.includes('high-value')) {
+      predictedRevenue = Math.round(avgOrderValue * 1.25);
+      growthPercentage = 18.5;
+      confidence = 92;
+      reason = `Top tier affinity: Consistent premium order basket sizing and strong campaign feedback signals solid upcoming spend volume.`;
+    }
+
+    // Adjust prediction if order frequencies have changed
+    const lastOrderDate = new Date(customer.lastOrderDate);
+    const now = new Date('2026-06-12T07:16:58-07:00'); // pivot reference date
+    const daysSinceLastOrder = Math.max(0, Math.floor((now.getTime() - lastOrderDate.getTime()) / (1000 * 60 * 60 * 24)));
+    
+    if (daysSinceLastOrder > 90 && predictedRevenue > 0) {
+      predictedRevenue = Math.round(predictedRevenue * 0.5);
+      growthPercentage -= 20.0;
+      confidence = Math.max(50, confidence - 15);
+      reason += ` Projected volume halved due to ${daysSinceLastOrder} days of transaction inactivity.`;
+    }
+
+    return {
+      customerId: customer.id,
+      month: '2026-07', // Predict next month
+      predictedRevenue,
+      growthPercentage: Math.round(growthPercentage * 10) / 10,
+      confidence,
+      reason,
+      generatedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    console.warn('[calculateFallbackForecast] calculation failed', err);
+    return {
+      customerId: customer.id,
+      month: '2026-07',
+      predictedRevenue: 1000,
+      growthPercentage: 0,
+      confidence: 80,
+      reason: 'Standard calculation template fallback applied on error.',
+      generatedAt: new Date().toISOString()
+    };
+  }
+}
+
+// -------------------------------------------------------------
+// CHURN PREDICTION ENGINE FILE PERSISTENCE & HELPERS
+// -------------------------------------------------------------
+const CHURN_PREDICTIONS_FILE = path.join(process.cwd(), 'churn_predictions.json');
+
+function getLocalChurnPredictions(): any[] {
+  try {
+    if (fs.existsSync(CHURN_PREDICTIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(CHURN_PREDICTIONS_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('[Churn Predictions Server] Error loading local predictions:', e);
+  }
+  return [];
+}
+
+function writeLocalChurnPredictions(predictions: any[]): void {
+  try {
+    fs.writeFileSync(CHURN_PREDICTIONS_FILE, JSON.stringify(predictions, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Churn Predictions Server] Error saving local predictions:', e);
+  }
+}
+
+const WORKFLOWS_FILE = path.join(process.cwd(), 'workflow_automations.json');
+
+function getLocalWorkflows(): any[] {
+  try {
+    if (fs.existsSync(WORKFLOWS_FILE)) {
+      return JSON.parse(fs.readFileSync(WORKFLOWS_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('[Workflows Server] Error loading local workflows:', e);
+  }
+  return [
+    {
+      id: "wf_1",
+      name: "Dormant Brewer Recovery Trigger",
+      trigger: "customer_inactive",
+      condition: "Inactivity > 60 days",
+      action: "generate_campaign",
+      status: "active",
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: "wf_2",
+      name: "VIP Appreciation Reward Loop",
+      trigger: "high_value_customer",
+      condition: "Total Spent > 20000 INR",
+      action: "send_whatsapp",
+      status: "paused",
+      createdAt: new Date().toISOString()
+    }
+  ];
+}
+
+function writeLocalWorkflows(workflows: any[]): void {
+  try {
+    fs.writeFileSync(WORKFLOWS_FILE, JSON.stringify(workflows, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Workflows Server] Error saving local workflows:', e);
+  }
+}
+
+function calculateFallbackChurnPrediction(customer: any, orders: any[], events: any[]): any {
+  try {
+    const lastOrderDate = new Date(customer.lastOrderDate);
+    const now = new Date('2026-06-18T15:50:09-07:00'); // pivot reference date
+    const daysSinceLastOrder = Math.max(0, Math.floor((now.getTime() - lastOrderDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const opensCount = events.filter(e => e.status === 'opened').length;
+    const clicksCount = events.filter(e => e.status === 'clicked').length;
+    const deliveryCount = events.length;
+
+    // Base churn risk scoring calculation (range: 0 to 100)
+    let recencyScore = 0; // recency contribution (max 50)
+    if (daysSinceLastOrder > 120) {
+      recencyScore = 50;
+    } else if (daysSinceLastOrder > 60) {
+      recencyScore = 35;
+    } else if (daysSinceLastOrder > 30) {
+      recencyScore = 20;
+    } else {
+      recencyScore = 5;
+    }
+
+    // Activity level contributions (max 30)
+    let engagementContribution = 30;
+    if (deliveryCount > 0) {
+      const interactionRate = (opensCount + clicksCount) / (deliveryCount * 2);
+      engagementContribution = Math.max(0, Math.round(30 * (1 - interactionRate)));
+    }
+
+    // Loyalty frequency check (max 20)
+    let loyaltyReduction = Math.min(20, customer.orderCount * 4);
+    
+    let score = Math.max(5, Math.min(99, recencyScore + engagementContribution - loyaltyReduction + 15));
+
+    // Dynamic adjustments based on tags
+    if (customer.tags.includes('inactive')) {
+      score = Math.max(90, score);
+    } else if (customer.tags.includes('at-risk')) {
+      score = Math.max(75, score);
+    } else if (customer.tags.includes('high-value') || customer.tags.includes('loyal')) {
+      score = Math.max(5, Math.round(score * 0.4));
+    }
+
+    let risk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+    if (score >= 75) {
+      risk = 'HIGH';
+    } else if (score >= 40) {
+      risk = 'MEDIUM';
+    }
+
+    const reason: string[] = [];
+    const recommendedActions: string[] = [];
+
+    if (daysSinceLastOrder > 90) {
+      reason.push(`Dormancy: Customer has not placed an order in ${daysSinceLastOrder} days.`);
+      recommendedActions.push("Launch an aggressive high-discount win-back campaign.");
+      recommendedActions.push("Assign sales representative for personal account check-in.");
+    } else if (daysSinceLastOrder > 30) {
+      reason.push(`Gap alert: Last transaction was ${daysSinceLastOrder} days ago.`);
+      recommendedActions.push("Target with limited-time 15% coupon.");
+    } else {
+      reason.push("Active purchase patterns: Placed an order within the last 30 days.");
+      recommendedActions.push("Invite to premium tier early arrival previews.");
+    }
+
+    if (deliveryCount > 0 && (opensCount + clicksCount) === 0) {
+      reason.push("Digital fatigue: Zero opens/clicks detected across last communication campaign events.");
+      recommendedActions.push("Switch channels to SMS or WhatsApp to improve open rates.");
+    } else if (clicksCount > 0) {
+      reason.push("Receptive communication: Recent click logs demonstrate high campaign engagement levels.");
+      recommendedActions.push("Trigger custom catalog emails corresponding to clicked items.");
+    } else {
+      reason.push("Neutral activity profile: Open events without high active purchasing interactions.");
+    }
+
+    if (customer.tags.includes('at-risk')) {
+      reason.push("Customer is listed under the CRM ruleset in the 'at-risk' segment.");
+      recommendedActions.push("Incentivize with a tailored mystery reward offer.");
+    }
+
+    if (customer.orderCount <= 1) {
+      reason.push("Single-order pattern: Low retention speed across single purchased items.");
+      recommendedActions.push("Deliver immediate satisfaction follow-up support survey.");
+    }
+
+    return {
+      customerId: customer.id,
+      risk,
+      score,
+      reason: reason.slice(0, 3),
+      recommendedActions: recommendedActions.slice(0, 3),
+      predictedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    console.warn('[calculateFallbackChurnPrediction] calculation failed', err);
+    return {
+      customerId: customer.id,
+      risk: 'LOW',
+      score: 10,
+      reason: ['Calculated score baseline fallback.'],
+      recommendedActions: ['No action needed at this time.'],
+      predictedAt: new Date().toISOString()
+    };
+  }
+}
+
+// -------------------------------------------------------------
+// CUSTOMER AI BRAIN PROFILE ENDPOINTS
+// -------------------------------------------------------------
+const AI_PROFILES_FILE = path.join(process.cwd(), 'customer_ai_profiles.json');
+
+function getAIProfiles(): any[] {
+  try {
+    if (fs.existsSync(AI_PROFILES_FILE)) {
+      return JSON.parse(fs.readFileSync(AI_PROFILES_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.error('[AI Profiles Server] Error loading profiles:', e);
+  }
+  return [];
+}
+
+function writeAIProfiles(profiles: any[]): void {
+  try {
+    fs.writeFileSync(AI_PROFILES_FILE, JSON.stringify(profiles, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[AI Profiles Server] Error saving profiles:', e);
+  }
+}
+
+function getRFMScore(customer: any): string {
+  const last = new Date(customer.lastOrderDate);
+  const now = new Date('2026-06-12T07:16:58-07:00');
+  const diffMs = Math.abs(now.getTime() - last.getTime());
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  const recencyScore = diffDays <= 7 ? 5 : diffDays <= 30 ? 4 : diffDays <= 90 ? 3 : diffDays <= 180 ? 2 : 1;
+  const frequencyScore = customer.orderCount >= 10 ? 5 : customer.orderCount >= 5 ? 4 : customer.orderCount >= 3 ? 3 : customer.orderCount >= 1 ? 2 : 1;
+  const monetaryScore = customer.totalSpent >= 15000 ? 5 : customer.totalSpent >= 10000 ? 4 : customer.totalSpent >= 5000 ? 3 : customer.totalSpent >= 2000 ? 2 : 1;
+  return `R${recencyScore}-F${frequencyScore}-M${monetaryScore}`;
+}
+
+function calculateFallbackAIProfile(customer: any): any {
+  const calculatedHealth = calculateCustomerHealth(customer);
+  const rfm = getRFMScore(customer);
+  const spent = customer.totalSpent;
+  const count = customer.orderCount;
+
+  const preferredChannel = customer.phone ? 'whatsapp' : 'email';
+
+  let recommendedActions = [
+    `Trigger loyalty reward points drop for next purchase replenishment`,
+    `Send direct WhatsApp invite for new winter single-origins roast launch`,
+    `Offer flat trial discount coupon for Mochi Specialty steel brewing dripper`
+  ];
+  let sentiment = 'Positive';
+  let churnRisk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  let aiSummary = `${customer.name} is a highly engaged customer of Mochi CRM, exhibiting strong affinity for artisanal whole beans. Recommended high-frequency engagement via their preferred ${preferredChannel} channel.`;
+
+  if (calculatedHealth.churnRisk === 'High') {
+    churnRisk = 'HIGH';
+    sentiment = 'Slightly Dissatisfied';
+    recommendedActions = [
+      `Dispatch high-priority winback coupon of 25% within 48 hours`,
+      `Deliver satisfaction survey post transaction checkout failures`,
+      `Recommend Monsoon Malabar roast subscription setup for streamlined refills`
+    ];
+    aiSummary = `Active churn hazard detected for ${customer.name}. Purchase gaps exceed standard replenishment models by 45+ days. Immediate high-incentive outreach recommended.`;
+  } else if (calculatedHealth.churnRisk === 'Medium') {
+    churnRisk = 'MEDIUM';
+    sentiment = 'Neutral';
+    recommendedActions = [
+      `Introduce to Subscribe & Save 10% options for daily standard roasts`,
+      `Offer trial filters bag alongside next checkout order`,
+      `Send personalized recipe guide for Cold Brew kits`
+    ];
+    aiSummary = `${customer.name} shows minor engagement erosion. Strategic subscription offers should prevent lapse into complete dormancy.`;
+  }
+
+  return {
+    customerId: customer.id,
+    healthScore: calculatedHealth.healthScore,
+    rfmScore: rfm,
+    churnRisk,
+    engagementScore: calculatedHealth.engagementScore,
+    sentiment,
+    preferredChannel,
+    lifetimeValue: spent,
+    predictedRevenue: Math.round(spent * (churnRisk === 'HIGH' ? 0.05 : churnRisk === 'MEDIUM' ? 0.25 : 0.45)),
+    nextPurchasePrediction: churnRisk === 'HIGH' ? 'Unlikely within 30 days' : 'Expected in 10-14 days (Espresso drip purchase)',
+    aiSummary,
+    recommendedActions
+  };
+}
+
+// GET /api/customers/:id/ai-profile
+app.get('/api/customers/:id/ai-profile', (req, res) => {
+  try {
+    const customerId = req.params.id;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const profiles = getAIProfiles();
+    let profile = profiles.find(p => p.customerId === customerId);
+
+    if (!profile) {
+      profile = calculateFallbackAIProfile(customer);
+    }
+
+    res.json(profile);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error loading AI Profile' });
+  }
+});
+
+// POST /api/customers/:id/generate-ai-profile
+app.post('/api/customers/:id/generate-ai-profile', async (req, res) => {
+  try {
+    const customerId = req.params.id;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const orders = getOrders().filter(o => o.customerId === customerId);
+    const events = getEvents().filter(e => e.customerId === customerId);
+    
+    const calculatedHealth = calculateCustomerHealth(customer);
+    const fallbackProfile = calculateFallbackAIProfile(customer);
+
+    const analysisPayload = {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        memberSince: customer.memberSince,
+        totalSpent: customer.totalSpent,
+        orderCount: customer.orderCount,
+        lastOrderDate: customer.lastOrderDate,
+        tags: customer.tags,
+        healthScore: calculatedHealth.healthScore,
+        engagementScore: calculatedHealth.engagementScore,
+        churnRisk: calculatedHealth.churnRisk
+      },
+      orders: orders.map(o => ({ amount: o.amount, items: o.items, timestamp: o.timestamp })),
+      campaignInteractions: events.map(e => ({ status: e.status, timestamp: e.timestamp }))
+    };
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's advanced machine learning Customer Brain Engine.
+Analyze the customer data, their spending habits, orders, and campaign interaction history.
+Perform high-dimensional predictive modeling to deliver the customer's AI Brain Profile.
+You MUST output a single, strict, valid JSON object matching this schema:
+{
+  "healthScore": (number) Customer relationship health out of 100.
+  "rfmScore": (string) Recency-Frequency-Monetary metric like 'R5-F4-M4'.
+  "churnRisk": (string) Must be exactly one of: 'LOW', 'MEDIUM', 'HIGH' (all capitalized).
+  "engagementScore": (number) Engagement index out of 100.
+  "sentiment": (string) Overall customer brand satisfaction and vibe (e.g., 'Positive', 'Dissatisfied', 'Highly Enthusiastic').
+  "preferredChannel": (string) Best communication pathway like 'whatsapp', 'email', 'sms', 'rcs'.
+  "lifetimeValue": (number) The historical accumulated spend of the customer.
+  "predictedRevenue": (number) The expected revenue contribution over the next quarter.
+  "nextPurchasePrediction": (string) 1 sentence projection of what they'll buy next and when.
+  "aiSummary": (string) 2-3 sentences summarizing their profile state, purchase behavior, and trends.
+  "recommendedActions": (string[]) EXACTLY 3 highly strategic personal recommendations for direct marketing.
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Deconstruct customer dossier and order transaction loops:
+${JSON.stringify(analysisPayload)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                healthScore: { type: Type.INTEGER },
+                rfmScore: { type: Type.STRING },
+                churnRisk: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                engagementScore: { type: Type.INTEGER },
+                sentiment: { type: Type.STRING },
+                preferredChannel: { type: Type.STRING },
+                lifetimeValue: { type: Type.INTEGER },
+                predictedRevenue: { type: Type.INTEGER },
+                nextPurchasePrediction: { type: Type.STRING },
+                aiSummary: { type: Type.STRING },
+                recommendedActions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: [
+                'healthScore',
+                'rfmScore',
+                'churnRisk',
+                'engagementScore',
+                'sentiment',
+                'preferredChannel',
+                'lifetimeValue',
+                'predictedRevenue',
+                'nextPurchasePrediction',
+                'aiSummary',
+                'recommendedActions'
+              ]
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        const finalProfile = {
+          customerId: customer.id,
+          healthScore: parsed.healthScore ?? fallbackProfile.healthScore,
+          rfmScore: parsed.rfmScore ?? fallbackProfile.rfmScore,
+          churnRisk: (parsed.churnRisk || fallbackProfile.churnRisk).toUpperCase(),
+          engagementScore: parsed.engagementScore ?? fallbackProfile.engagementScore,
+          sentiment: parsed.sentiment ?? fallbackProfile.sentiment,
+          preferredChannel: parsed.preferredChannel ?? fallbackProfile.preferredChannel,
+          lifetimeValue: parsed.lifetimeValue ?? fallbackProfile.lifetimeValue,
+          predictedRevenue: parsed.predictedRevenue ?? fallbackProfile.predictedRevenue,
+          nextPurchasePrediction: parsed.nextPurchasePrediction ?? fallbackProfile.nextPurchasePrediction,
+          aiSummary: parsed.aiSummary ?? fallbackProfile.aiSummary,
+          recommendedActions: parsed.recommendedActions ?? fallbackProfile.recommendedActions
+        };
+
+        const profiles = getAIProfiles();
+        const existingIdx = profiles.findIndex(p => p.customerId === customerId);
+        if (existingIdx !== -1) {
+          profiles[existingIdx] = finalProfile;
+        } else {
+          profiles.push(finalProfile);
+        }
+        writeAIProfiles(profiles);
+
+        return res.json(finalProfile);
+
+      } catch (e) {
+        console.error('[Copilot Engine] Gemini AI Brain profiling model failed, falling back safely:', e);
+      }
+    }
+
+    const profiles = getAIProfiles();
+    const existingIdx = profiles.findIndex(p => p.customerId === customerId);
+    if (existingIdx !== -1) {
+      profiles[existingIdx] = fallbackProfile;
+    } else {
+      profiles.push(fallbackProfile);
+    }
+    writeAIProfiles(profiles);
+
+    res.json(fallbackProfile);
+
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error generating AI Profile' });
+  }
+});
+
+// -------------------------------------------------------------
+// REVENUE FORECAST ROUTING PATHS
+// -------------------------------------------------------------
+
+// GET /api/revenue/forecast/:customerId
+app.get('/api/revenue/forecast/:customerId', (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const forecasts = getLocalForecasts();
+    let forecast = forecasts.find(f => f.customerId === customerId);
+
+    if (!forecast) {
+      const orders = getOrders().filter(o => o.customerId === customerId);
+      const events = getEvents().filter(e => e.customerId === customerId);
+      forecast = calculateFallbackForecast(customer, orders, events);
+    }
+
+    res.json(forecast);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error loading revenue forecast' });
+  }
+});
+
+// GET /api/revenue/monthly
+app.get('/api/revenue/monthly', (req, res) => {
+  try {
+    const customers = getCustomers();
+    const orders = getOrders();
+    const profiles = getLocalForecasts();
+    
+    const months = [
+      { name: 'Jul 2026', factor: 1.0 },
+      { name: 'Aug 2026', factor: 1.05 },
+      { name: 'Sep 2026', factor: 1.15 },
+      { name: 'Oct 2026', factor: 1.10 },
+      { name: 'Nov 2026', factor: 1.30 },
+      { name: 'Dec 2026', factor: 1.50 }
+    ];
+
+    const baseForecasts = customers.map(c => {
+      const cOrders = orders.filter(o => o.customerId === c.id);
+      const cEvents = getEvents().filter(e => e.customerId === c.id);
+      const saved = profiles.find(p => p.customerId === c.id);
+      if (saved) return saved;
+      return calculateFallbackForecast(c, cOrders, cEvents);
+    });
+
+    const aggregateNextMonthRev = baseForecasts.reduce((sum, f) => sum + f.predictedRevenue, 0);
+    const avgConfidence = Math.round(baseForecasts.reduce((sum, f) => sum + f.confidence, 0) / Math.max(1, baseForecasts.length));
+    const avgGrowth = Math.round(baseForecasts.reduce((sum, f) => sum + f.growthPercentage, 0) / Math.max(1, baseForecasts.length) * 10) / 10;
+
+    const monthlyData = months.map((m, idx) => {
+      const predictedRevenue = Math.round(aggregateNextMonthRev * m.factor);
+      let growthPercentage = avgGrowth;
+      if (idx > 0) {
+        const priorRev = Math.round(aggregateNextMonthRev * months[idx - 1].factor);
+        growthPercentage = Math.round(((predictedRevenue - priorRev) / priorRev) * 100 * 10) / 10;
+      }
+      return {
+        month: m.name,
+        predictedRevenue,
+        growthPercentage,
+        confidence: Math.max(60, avgConfidence - idx * 2)
+      };
+    });
+
+    res.json(monthlyData);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error compiling monthly predictions' });
+  }
+});
+
+// GET /api/revenue/quarterly
+app.get('/api/revenue/quarterly', (req, res) => {
+  try {
+    const customers = getCustomers();
+    const orders = getOrders();
+    const profiles = getLocalForecasts();
+
+    const quarters = [
+      { name: 'Q3 2026', monthsCount: 3, seasonalBump: 1.08 },
+      { name: 'Q4 2026', monthsCount: 3, seasonalBump: 1.40 },
+      { name: 'Q1 2027', monthsCount: 3, seasonalBump: 1.15 },
+      { name: 'Q2 2027', monthsCount: 3, seasonalBump: 1.25 }
+    ];
+
+    const baseForecasts = customers.map(c => {
+      const cOrders = orders.filter(o => o.customerId === c.id);
+      const cEvents = getEvents().filter(e => e.customerId === c.id);
+      const saved = profiles.find(p => p.customerId === c.id);
+      if (saved) return saved;
+      return calculateFallbackForecast(c, cOrders, cEvents);
+    });
+
+    const baselineMonthlyRev = baseForecasts.reduce((sum, f) => sum + f.predictedRevenue, 0);
+    const avgConfidence = Math.round(baseForecasts.reduce((sum, f) => sum + f.confidence, 0) / Math.max(1, baseForecasts.length));
+
+    let previousQuarterRev = baselineMonthlyRev * 3;
+
+    const quarterlyData = quarters.map((q, idx) => {
+      const predictedRevenue = Math.round(baselineMonthlyRev * q.monthsCount * q.seasonalBump);
+      const growthPercentage = Math.round(((predictedRevenue - previousQuarterRev) / previousQuarterRev) * 100 * 10) / 10;
+      previousQuarterRev = predictedRevenue;
+      
+      return {
+        quarter: q.name,
+        predictedRevenue,
+        growthPercentage,
+        confidence: Math.max(55, avgConfidence - 5 - idx * 3)
+      };
+    });
+
+    res.json(quarterlyData);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error compiling quarterly predictions' });
+  }
+});
+
+// POST /api/revenue/generate/:customerId
+app.post('/api/revenue/generate/:customerId', async (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const orders = getOrders().filter(o => o.customerId === customerId);
+    const events = getEvents().filter(e => e.customerId === customerId);
+    const fallbackForecast = calculateFallbackForecast(customer, orders, events);
+
+    const aov = customer.orderCount > 0 ? (customer.totalSpent / customer.orderCount) : 0;
+    
+    const analysisPayload = {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        memberSince: customer.memberSince,
+        totalSpent: customer.totalSpent,
+        orderCount: customer.orderCount,
+        lastOrderDate: customer.lastOrderDate,
+        averageOrderValue: aov,
+        tags: customer.tags
+      },
+      orders: orders.map(o => ({ amount: o.amount, items: o.items, timestamp: o.timestamp })),
+      campaignEngagement: events.map(e => {
+        const campaign = getCampaigns().find(c => c.campaignId === e.campaignId);
+        return {
+          campaignId: e.campaignId,
+          channel: campaign?.channel || 'unknown',
+          status: e.status,
+          timestamp: e.timestamp
+        };
+      })
+    };
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's advanced machine learning Revenue Forecast Engine.
+Analyze the customer details, historical purchase orders, transaction values, average order values, and campaign interactions.
+Perform high-dimensional predictive LTV modelling to project their revenue potential, expected growth, and prediction confidence for NEXT MONTH (July 2026).
+You MUST output a single, strict, valid JSON object matching this schema:
+{
+  "predictedRevenue": (number) Next month's predicted revenue in INR (₹) or standard customer budget projection,
+  "growthPercentage": (number) expected growth/change percentage compared to historical average monthly order spend,
+  "confidence": (number) predictive confidence score out of 100,
+  "reason": (string) 1-2 sentences of strategic rationale based on their behavior
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Deconstruct customer transaction velocity & campaign signals:
+${JSON.stringify(analysisPayload)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                predictedRevenue: { type: Type.INTEGER },
+                growthPercentage: { type: Type.NUMBER },
+                confidence: { type: Type.INTEGER },
+                reason: { type: Type.STRING }
+              },
+              required: [
+                'predictedRevenue',
+                'growthPercentage',
+                'confidence',
+                'reason'
+              ]
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        const finalForecast = {
+          customerId: customer.id,
+          month: '2026-07',
+          predictedRevenue: typeof parsed.predictedRevenue === 'number' ? parsed.predictedRevenue : fallbackForecast.predictedRevenue,
+          growthPercentage: typeof parsed.growthPercentage === 'number' ? parsed.growthPercentage : fallbackForecast.growthPercentage,
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : fallbackForecast.confidence,
+          reason: parsed.reason || fallbackForecast.reason,
+          generatedAt: new Date().toISOString()
+        };
+
+        const profiles = getLocalForecasts();
+        const existingIdx = profiles.findIndex(p => p.customerId === customerId);
+        if (existingIdx !== -1) {
+          profiles[existingIdx] = finalForecast;
+        } else {
+          profiles.push(finalForecast);
+        }
+        writeLocalForecasts(profiles);
+
+        return res.json(finalForecast);
+
+      } catch (e) {
+        console.error('[Forecast Engine] Gemini AI forecasting model failed, falling back safely:', e);
+      }
+    }
+
+    const profiles = getLocalForecasts();
+    const existingIdx = profiles.findIndex(p => p.customerId === customerId);
+    if (existingIdx !== -1) {
+      profiles[existingIdx] = fallbackForecast;
+    } else {
+      profiles.push(fallbackForecast);
+    }
+    writeLocalForecasts(profiles);
+
+    res.json(fallbackForecast);
+
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error generating revenue forecast' });
+  }
+});
+
+// -------------------------------------------------------------
+// CHURN PREDICTION ROUTING ENDPOINTS
+// -------------------------------------------------------------
+
+// GET /api/churn/dashboard
+app.get('/api/churn/dashboard', (req, res) => {
+  try {
+    const customers = getCustomers();
+    const predictions = getLocalChurnPredictions();
+    const orders = getOrders();
+    const events = getEvents();
+
+    let totalScoreSum = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+    const factorCounts: { [key: string]: number } = {};
+
+    for (const customer of customers) {
+      let pred = predictions.find(p => p.customerId === customer.id);
+      if (!pred) {
+        const custOrders = orders.filter(o => o.customerId === customer.id);
+        const custEvents = events.filter(e => e.customerId === customer.id);
+        pred = calculateFallbackChurnPrediction(customer, custOrders, custEvents);
+      }
+
+      totalScoreSum += pred.score;
+      if (pred.risk === 'HIGH') {
+        highCount++;
+      } else if (pred.risk === 'MEDIUM') {
+        mediumCount++;
+      } else {
+        lowCount++;
+      }
+
+      if (pred.reason && Array.isArray(pred.reason)) {
+        pred.reason.forEach((r: string) => {
+          factorCounts[r] = (factorCounts[r] || 0) + 1;
+        });
+      }
+    }
+
+    const topChurnFactors = Object.entries(factorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([factor]) => factor);
+
+    const averageChurnScore = customers.length > 0 ? (totalScoreSum / customers.length) : 0;
+
+    res.json({
+      highRiskCount: highCount,
+      mediumRiskCount: mediumCount,
+      lowRiskCount: lowCount,
+      averageChurnScore: Math.round(averageChurnScore * 10) / 10,
+      topChurnFactors: topChurnFactors.length > 0 ? topChurnFactors : [
+        "Inactivity over 90 days",
+        "Single-order purchase patterns",
+        "High campaign digital fatigue"
+      ]
+    });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error loading churn dashboard statistics' });
+  }
+});
+
+// GET /api/churn/high-risk
+app.get('/api/churn/high-risk', (req, res) => {
+  try {
+    const customers = getCustomers();
+    const predictions = getLocalChurnPredictions();
+    const orders = getOrders();
+    const events = getEvents();
+
+    const highRiskAlerts: any[] = [];
+    for (const customer of customers) {
+      let pred = predictions.find(p => p.customerId === customer.id);
+      if (!pred) {
+        const custOrders = orders.filter(o => o.customerId === customer.id);
+        const custEvents = events.filter(e => e.customerId === customer.id);
+        pred = calculateFallbackChurnPrediction(customer, custOrders, custEvents);
+      }
+      
+      if (pred.risk === 'HIGH') {
+        highRiskAlerts.push({
+          customerName: customer.name,
+          customerEmail: customer.email,
+          totalSpent: customer.totalSpent,
+          orderCount: customer.orderCount,
+          lastOrderDate: customer.lastOrderDate,
+          tags: customer.tags,
+          ...pred
+        });
+      }
+    }
+
+    res.json(highRiskAlerts);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error loading high-risk predictions' });
+  }
+});
+
+// GET /api/churn/:customerId
+app.get('/api/churn/:customerId', (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const predictions = getLocalChurnPredictions();
+    let pred = predictions.find(p => p.customerId === customerId);
+
+    if (!pred) {
+      const orders = getOrders().filter(o => o.customerId === customerId);
+      const events = getEvents().filter(e => e.customerId === customerId);
+      pred = calculateFallbackChurnPrediction(customer, orders, events);
+    }
+
+    res.json(pred);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error loading customer' });
+  }
+});
+
+// POST /api/churn/generate/:customerId
+app.post('/api/churn/generate/:customerId', async (req, res) => {
+  try {
+    const customerId = req.params.customerId;
+    const customers = getCustomers();
+    const customer = customers.find(c => c.id === customerId);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    const orders = getOrders().filter(o => o.customerId === customerId);
+    const events = getEvents().filter(e => e.customerId === customerId);
+    const fallbackPred = calculateFallbackChurnPrediction(customer, orders, events);
+
+    const analysisPayload = {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        memberSince: customer.memberSince,
+        totalSpent: customer.totalSpent,
+        orderCount: customer.orderCount,
+        lastOrderDate: customer.lastOrderDate,
+        tags: customer.tags
+      },
+      orders: orders.map(o => ({ amount: o.amount, items: o.items, timestamp: o.timestamp })),
+      campaignEngagement: events.map(e => {
+        const campaign = getCampaigns().find(c => c.campaignId === e.campaignId);
+        return {
+          campaignId: e.campaignId,
+          channel: campaign?.channel || 'unknown',
+          status: e.status,
+          timestamp: e.timestamp
+        };
+      })
+    };
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's advanced machine learning Customer Churn Prediction Engine.
+Analyze the customer's behavioral telemetry (recency of last purchase, order count frequency, spending trend direction, newsletter opens, campaign link clicks, segment tags, and interaction logs).
+Predict their likelihood of churn and generate deep preventative recovery plans.
+Perform rigorous forecasting and output a strictly formatted valid JSON object matching this schema:
+{
+  "risk": "LOW" | "MEDIUM" | "HIGH",
+  "score": (number) probability of churn/attrition rate from 0.0 to 100.0,
+  "reason": [string] exact top 2-3 behavioral root causes for this churn index classification,
+  "recommendedActions": [string] exact 2-3 highly operational, personalized win-back suggestions
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Evaluate customer attrition attributes and engagement signals:
+${JSON.stringify(analysisPayload)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                risk: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH'] },
+                score: { type: Type.NUMBER },
+                reason: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                recommendedActions: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: ['risk', 'score', 'reason', 'recommendedActions']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        const finalPred = {
+          customerId: customer.id,
+          risk: (parsed.risk === 'LOW' || parsed.risk === 'MEDIUM' || parsed.risk === 'HIGH') ? parsed.risk : fallbackPred.risk,
+          score: typeof parsed.score === 'number' ? parsed.score : fallbackPred.score,
+          reason: Array.isArray(parsed.reason) ? parsed.reason : fallbackPred.reason,
+          recommendedActions: Array.isArray(parsed.recommendedActions) ? parsed.recommendedActions : fallbackPred.recommendedActions,
+          predictedAt: new Date().toISOString()
+        };
+
+        const predictions = getLocalChurnPredictions();
+        const existingIdx = predictions.findIndex(p => p.customerId === customerId);
+        if (existingIdx !== -1) {
+          predictions[existingIdx] = finalPred;
+        } else {
+          predictions.push(finalPred);
+        }
+        writeLocalChurnPredictions(predictions);
+
+        return res.json(finalPred);
+      } catch (err) {
+        console.error('[Churn Engine] Gemini churn prediction generation failed, using fallback calculations:', err);
+      }
+    }
+
+    // Direct fallback application
+    const predictions = getLocalChurnPredictions();
+    const existingIdx = predictions.findIndex(p => p.customerId === customerId);
+    if (existingIdx !== -1) {
+      predictions[existingIdx] = fallbackPred;
+    } else {
+      predictions.push(fallbackPred);
+    }
+    writeLocalChurnPredictions(predictions);
+
+    res.json(fallbackPred);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error generating churn prediction' });
+  }
+});
+
+// GETS sales telemetry prepared for prompt
+function prepareSalesTelemetry(targetCustomerId?: string) {
+  const customers = getCustomers();
+  const orders = getOrders();
+  const events = getEvents();
+  const churnPredictions = getLocalChurnPredictions();
+
+  let relevantCustomers = customers;
+  if (targetCustomerId) {
+    relevantCustomers = customers.filter(c => c.id === targetCustomerId);
+    if (relevantCustomers.length === 0) {
+      relevantCustomers = customers.slice(0, 5);
+    }
+  } else {
+    // Sort to prioritize interesting cohorts & limit data package size safely
+    relevantCustomers = customers.slice(0, 15);
+  }
+
+  return relevantCustomers.map(c => {
+    const custOrders = orders.filter(o => o.customerId === c.id);
+    const custEvents = events.filter(e => e.customerId === c.id);
+    const churnPred = churnPredictions.find(p => p.customerId === c.id);
+    const health = calculateCustomerHealth(c);
+
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      memberSince: c.memberSince,
+      totalSpent: c.totalSpent,
+      orderCount: c.orderCount,
+      lastOrderDate: c.lastOrderDate,
+      tags: c.tags,
+      orders: custOrders.map(o => ({ amount: o.amount, timestamp: o.timestamp, itemsCount: o.items?.length || 1 })),
+      campaignEngagement: custEvents.map(e => ({ status: e.status, timestamp: e.timestamp })),
+      churnRisk: churnPred ? { risk: churnPred.risk, score: churnPred.score } : { risk: 'MEDIUM', score: 50 },
+      health: health
+    };
+  });
+}
+
+function generateDynamicSalesFallback(type: 'find-buyers' | 'strategy' | 'followup', customerId?: string): any {
+  const customers = getCustomers();
+  
+  let target: any[] = [];
+  if (customerId) {
+    const found = customers.find(c => c.id === customerId);
+    if (found) target.push(found);
+  } else {
+    target = [...customers].sort((a,b) => b.totalSpent - a.totalSpent).slice(0, 2);
+  }
+
+  if (target.length === 0 && customers.length > 0) {
+    target.push(customers[0]);
+  }
+
+  const mappedCustomers = target.map(c => {
+    return {
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      score: Math.round(75 + Math.random() * 20),
+      health: c.tags?.includes('inactive') ? 'At Risk' : 'Healthy',
+      preferredChannel: c.tags?.includes('whatsapp') ? 'WhatsApp' : 'Email'
+    };
+  });
+
+  const mainName = mappedCustomers[0]?.name || 'Valued Customer';
+  let reason = '';
+  let predictedRevenue = 15000;
+  let recommendedCampaign = '';
+  let email = '';
+  let whatsapp = '';
+
+  if (type === 'find-buyers') {
+    reason = "Fallback: Identified strong spending levels and active interaction frequency across target profiles.";
+    predictedRevenue = 24000;
+    recommendedCampaign = "VIP Micro-Lot Espresso Blend Showcase";
+    email = `Subject: First-Access Invitation: Fresh Single-Origin beans have landed at Mochi!\n\nDear ${mainName},\n\nWe appreciate your amazing history with us. We have secured early-access bags of our fresh microlot single-origin. Code: VIPFRESH for 20% off.`;
+    whatsapp = `Hey ${mainName}! ☕ Your exceptional brewing score makes you eligible for early access to our new microlot beans. Code VIPFRESH for 20% off!`;
+  } else if (type === 'strategy') {
+    reason = "Fallback: High loyalty metrics paired with moderate fatigue suggest premium value retention triggers.";
+    predictedRevenue = 18000;
+    recommendedCampaign = "Mochi Special Loyalty and Churn Mitigation Outreach";
+    email = `Subject: Fresh coffee points waiting inside (An update for ${mainName})\n\nHi ${mainName},\n\nWe want to thank you for brewing with us! We have credited 150 bonus loyalty points to your account + added a special 15% discount for your favorite blends code LOYAL15.`;
+    whatsapp = `Hi ${mainName}! ☕ Grab your exclusive 150 loyalty points reward and a 15% discount code *LOYAL15* valid this week!`;
+  } else {
+    reason = "Fallback: Targeted follow-up to address recent dormant or warm lead activity indicators.";
+    predictedRevenue = 9500;
+    recommendedCampaign = "Localized Win-Back Engagement Campaign";
+    email = `Subject: Let's brew something wonderful again - grab a free handcrafted treat!\n\nHi ${mainName},\n\nWe haven't seen you in a bit. Order any fresh batch of beans inside 48h and we'll add a beautiful complimentary handcrafted canvas tote bag. Code GIVETOTE.`;
+    whatsapp = `Hey ${mainName}! ☕ Fresh roasts are waiting in our Mochi kitchen. Grab a complimentary canvas tote bag with your next order using code: GIVETOTE!`;
+  }
+
+  return {
+    customers: mappedCustomers,
+    reason,
+    predictedRevenue,
+    recommendedCampaign,
+    email,
+    whatsapp
+  };
+}
+
+// -------------------------------------------------------------
+// AI SALES AGENT ENDPOINTS
+// -------------------------------------------------------------
+
+// POST /api/ai/sales/find-buyers
+app.post('/api/ai/sales/find-buyers', async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    const telemetry = prepareSalesTelemetry(customerId);
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's advanced machine learning Customer Buyer Propensity Agent.
+Analyze the provided customer profiles containing purchase history, customer health, churn score, campaigns, and engagement metrics.
+Recommend target customer(s) with high sales potential.
+Return a strictly formatted valid JSON matching the schema:
+{
+  "customers": [
+    {
+      "id": "...",
+      "name": "...",
+      "email": "...",
+      "score": (number between 0 and 100 representing purchase propensity),
+      "health": "Healthy" | "At Risk",
+      "preferredChannel": "Email" | "WhatsApp" | "SMS"
+    }
+  ],
+  "reason": "Detailed explanatory rationale about why these customers are highly likely to convert",
+  "predictedRevenue": (number) estimated incremental sales revenue in INR,
+  "recommendedCampaign": "Dynamic recommended sales campaign title",
+  "email": "Subject: ...\\n\\nFull written personalized promotional email pitch",
+  "whatsapp": "Direct WhatsApp message template featuring emoji and bold markdown"
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Evaluate buyer propensity telemetry signals:\n${JSON.stringify(telemetry)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                customers: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      email: { type: Type.STRING },
+                      score: { type: Type.NUMBER },
+                      health: { type: Type.STRING },
+                      preferredChannel: { type: Type.STRING }
+                    },
+                    required: ['id', 'name', 'email']
+                  }
+                },
+                reason: { type: Type.STRING },
+                predictedRevenue: { type: Type.NUMBER },
+                recommendedCampaign: { type: Type.STRING },
+                email: { type: Type.STRING },
+                whatsapp: { type: Type.STRING }
+              },
+              required: ['customers', 'reason', 'predictedRevenue', 'recommendedCampaign', 'email', 'whatsapp']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        return res.json(parsed);
+      } catch (geminiErr) {
+        console.error('[Sales Agent Engine] Gemini find-buyers analysis failed, fallback triggered:', geminiErr);
+      }
+    }
+
+    const fallback = generateDynamicSalesFallback('find-buyers', customerId);
+    res.json(fallback);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error executing client buyer matching' });
+  }
+});
+
+// POST /api/ai/sales/strategy
+app.post('/api/ai/sales/strategy', async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    const telemetry = prepareSalesTelemetry(customerId);
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's senior Customer Sales Strategist Agent.
+Analyze the provided customer profiles (RFM, tags, churn, engagement) and construct a high-performance win-back and retention sales strategy.
+Draft the exact promotional pitch and campaign strategy customized to coffee preferences.
+Return a strictly formatted valid JSON matching the schema:
+{
+  "customers": [
+    {
+      "id": "...",
+      "name": "...",
+      "email": "...",
+      "score": (number representing affinity),
+      "health": "Healthy" | "At Risk",
+      "preferredChannel": "Email" | "WhatsApp" | "SMS"
+    }
+  ],
+  "reason": "Strategic behavioral reason behind current customer retention / upsell campaign",
+  "predictedRevenue": (number) estimated strategy sales yield in INR,
+  "recommendedCampaign": "Dynamic strategic campaign heading",
+  "email": "Subject: ...\\n\\nFull strategic promotional email copy of the promotion",
+  "whatsapp": "Compelling call-to-action WhatsApp text pitch with bold highlight markup"
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Build optimized high-conversion sales strategy from telemetry data:\n${JSON.stringify(telemetry)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                customers: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      email: { type: Type.STRING },
+                      score: { type: Type.NUMBER },
+                      health: { type: Type.STRING },
+                      preferredChannel: { type: Type.STRING }
+                    },
+                    required: ['id', 'name', 'email']
+                  }
+                },
+                reason: { type: Type.STRING },
+                predictedRevenue: { type: Type.NUMBER },
+                recommendedCampaign: { type: Type.STRING },
+                email: { type: Type.STRING },
+                whatsapp: { type: Type.STRING }
+              },
+              required: ['customers', 'reason', 'predictedRevenue', 'recommendedCampaign', 'email', 'whatsapp']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        return res.json(parsed);
+      } catch (geminiErr) {
+        console.error('[Sales Agent Engine] Gemini sales-strategy failed, fallback triggered:', geminiErr);
+      }
+    }
+
+    const fallback = generateDynamicSalesFallback('strategy', customerId);
+    res.json(fallback);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error generating customer retention strategy' });
+  }
+});
+
+// POST /api/ai/sales/followup
+app.post('/api/ai/sales/followup', async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    const telemetry = prepareSalesTelemetry(customerId);
+
+    const ai = getAi();
+    if (ai) {
+      try {
+        const sysInstruction = `You are Mochi CRM's persistent Customer Sales Follow-up Agent.
+Evaluate customer's latest engagement profiles (recent warmth signals, purchase periods, Churn Index score).
+Draft an impactful, personalized win-back sales follow-up pitch offering exclusive rewards.
+Return a strictly formatted valid JSON matching the schema:
+{
+  "customers": [
+    {
+      "id": "...",
+      "name": "...",
+      "email": "...",
+      "score": (number representing follow-up prioritization),
+      "health": "Healthy" | "At Risk",
+      "preferredChannel": "Email" | "WhatsApp" | "SMS"
+    }
+  ],
+  "reason": "Engagement follow-up justification based on abandoned cart/dormant triggers",
+  "predictedRevenue": (number) estimated revenue recovered from direct follow-up,
+  "recommendedCampaign": "Dynamic win-back follow-up campaign label",
+  "email": "Subject: ...\\n\\nFull written personalized follow-up outbound email pitch",
+  "whatsapp": "Direct WhatsApp reminder copy featuring clear call to action and highlights"
+}`;
+
+        const gResponse = await generateContentWithRetry({
+          preferredModel: 'gemini-3.5-flash',
+          contents: `Build optimized high-conversion follow-up pitch from telemetry data:\n${JSON.stringify(telemetry)}`,
+          config: {
+            systemInstruction: sysInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                customers: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      email: { type: Type.STRING },
+                      score: { type: Type.NUMBER },
+                      health: { type: Type.STRING },
+                      preferredChannel: { type: Type.STRING }
+                    },
+                    required: ['id', 'name', 'email']
+                  }
+                },
+                reason: { type: Type.STRING },
+                predictedRevenue: { type: Type.NUMBER },
+                recommendedCampaign: { type: Type.STRING },
+                email: { type: Type.STRING },
+                whatsapp: { type: Type.STRING }
+              },
+              required: ['customers', 'reason', 'predictedRevenue', 'recommendedCampaign', 'email', 'whatsapp']
+            }
+          }
+        });
+
+        const parsed = JSON.parse(gResponse.text || '{}');
+        return res.json(parsed);
+      } catch (geminiErr) {
+        console.error('[Sales Agent Engine] Gemini followup generation failed, fallback triggered:', geminiErr);
+      }
+    }
+
+    const fallback = generateDynamicSalesFallback('followup', customerId);
+    res.json(fallback);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Error generating localized client sales follow-up' });
+  }
+});
+
+// -------------------------------------------------------------
+// SECURED MODULAR ROUTING FOR CRM ENGINE
+// -------------------------------------------------------------
+app.use('/api/workflows', workflowRouter);
+app.use('/api/agents', agentRouter);
+app.use('/api/memory', memoryRouter);
+app.use('/api/graph', graphRouter);
+app.use('/api/simulation', simulationRouter);
 
 // 3b. DELETE CUSTOMER
 app.delete('/api/customers/:id', (req, res) => {
